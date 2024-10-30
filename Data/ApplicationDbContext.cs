@@ -70,10 +70,12 @@ namespace ETS_CRUD_DEMO.Data
             // Configure Skills to be stored as JSON
             modelBuilder.Entity<Employee>()
                 .Property(e => e.Skills)
+                .HasColumnType("nvarchar(max)")
                 .HasConversion(
-                    skills => JsonSerializer.Serialize(skills, (JsonSerializerOptions)null),
-                    skills => JsonSerializer.Deserialize<List<string>>(skills, (JsonSerializerOptions)null)
-                );
+                skills => JsonSerializer.Serialize(skills, (JsonSerializerOptions)null),
+                skills => JsonSerializer.Deserialize<List<string>>(skills, (JsonSerializerOptions)null)
+     );
+
         }
     }
 }
