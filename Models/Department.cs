@@ -1,9 +1,20 @@
-﻿namespace ETS_CRUD_DEMO.Models
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace ETS_CRUD_DEMO.Models
 {
     public class Department
     {
-        public int DepartmentId { get; set; }
+        [Key]
+        public Guid DepartmentId { get; set; }
+
+        [Required]
+        [MaxLength(100)]
         public string DepartmentName { get; set; }
+
+        [MaxLength(500)]
         public string Description { get; set; }
+
+        public ICollection<Employee> Employees { get; set; }
     }
+
 }

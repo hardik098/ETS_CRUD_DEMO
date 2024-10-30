@@ -1,10 +1,21 @@
-﻿namespace ETS_CRUD_DEMO.Models
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace ETS_CRUD_DEMO.Models
 {
     public class Role
     {
-        public int RoleId { get; set; }
+        [Key]
+        public Guid RoleId { get; set; }
+
+        [Required]
+        [MaxLength(50)]
         public string RoleName { get; set; }
-        public string Permissions { get; set; } // JSON or comma-separated values
+
+        [MaxLength(1000)]
+        public string Permissions { get; set; }
+
+        public ICollection<Employee> Employees { get; set; }
     }
+
 
 }
