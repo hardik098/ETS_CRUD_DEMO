@@ -41,41 +41,46 @@ namespace ETS_CRUD_DEMO.Data
                 .Property(e => e.Gender)
                 .HasConversion<string>(); // Store gender as a string in the database
 
-            // Configure relationships
+            // Configure Skills to be stored as JSON
+            modelBuilder.Entity<Employee>()
+                    .Property(e => e.Skills)
+                    .HasColumnType("nvarchar(max)")
+                    .HasConversion(
+                    skills => JsonSerializer.Serialize(skills, (JsonSerializerOptions)null),
+                    skills => JsonSerializer.Deserialize<List<string>>(skills, (JsonSerializerOptions)null)
+         );
+
+            // Configure relationships without cascading delete
             modelBuilder.Entity<Employee>()
                 .HasOne(e => e.Department)
                 .WithMany(d => d.Employees)
-                .HasForeignKey(e => e.DepartmentId);
+                .HasForeignKey(e => e.DepartmentId)
+                .OnDelete(DeleteBehavior.Restrict); // Or use DeleteBehavior.NoAction
 
             modelBuilder.Entity<Employee>()
                 .HasOne(e => e.Role)
                 .WithMany(r => r.Employees)
-                .HasForeignKey(e => e.RoleId);
+                .HasForeignKey(e => e.RoleId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<Employee>()
                 .HasOne(e => e.State)
                 .WithMany(s => s.Employees)
-                .HasForeignKey(e => e.StateId);
+                .HasForeignKey(e => e.StateId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<Employee>()
                 .HasOne(e => e.City)
                 .WithMany(c => c.Employees)
-                .HasForeignKey(e => e.CityId);
+                .HasForeignKey(e => e.CityId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<City>()
                 .HasOne(c => c.State)
                 .WithMany(s => s.Cities)
-                .HasForeignKey(c => c.StateId);
-
-            // Configure Skills to be stored as JSON
-            modelBuilder.Entity<Employee>()
-                .Property(e => e.Skills)
-                .HasColumnType("nvarchar(max)")
-                .HasConversion(
-                skills => JsonSerializer.Serialize(skills, (JsonSerializerOptions)null),
-                skills => JsonSerializer.Deserialize<List<string>>(skills, (JsonSerializerOptions)null)
-     );
-
+                .HasForeignKey(c => c.StateId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
+
     }
 }
