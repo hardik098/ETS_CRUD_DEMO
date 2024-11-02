@@ -1,0 +1,235 @@
+﻿@using ETS_CRUD_DEMO.Enums
+@model Employee
+@{
+    ViewData["Title"] = "Edit Employee";
+    var skills = new[] {
+        new { Id = "csharp", Name = "C#" },
+        new { Id = "javascript", Name = "JavaScript" },
+        new { Id = "python", Name = "Python" },
+        new { Id = "java", Name = "Java" },
+        new { Id = "sql", Name = "SQL" },
+        new { Id = "angular", Name = "Angular" },
+        new { Id = "react", Name = "React" },
+        new { Id = "nodejs", Name = "Node.js" }
+    };
+}
+
+<div class="container">
+    <h2 class="mb-4">Edit Employee</h2>
+    <form asp-action="Edit" enctype="multipart/form-data" method="post">
+        <input type="hidden" asp-for="EmployeeId" />
+        <input type="hidden" asp-for="ProfilePicture" />
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+        <div class="row">
+            <!-- Personal Information -->
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Personal Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="FirstName" class="form-label"></label>
+                                <input asp-for="FirstName" class="form-control" />
+                                <span asp-validation-for="FirstName" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="LastName" class="form-label"></label>
+                                <input asp-for="LastName" class="form-control" />
+                                <span asp-validation-for="LastName" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="Email" class="form-label"></label>
+                                <input asp-for="Email" type="email" class="form-control" />
+                                <span asp-validation-for="Email" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="PhoneNumber" class="form-label"></label>
+                                <input asp-for="PhoneNumber" class="form-control" />
+                                <span asp-validation-for="PhoneNumber" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="Gender" class="form-label"></label>
+                                <select asp-for="Gender" asp-items="Html.GetEnumSelectList<GenderOptions>()" class="form-select">
+                                    <option value="">Select Gender</option>
+                                </select>
+                                <span asp-validation-for="Gender" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="DOB" class="form-label"></label>
+                                <input asp-for="DOB" class="form-control" type="date" />
+                                <span asp-validation-for="DOB" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Professional Information -->
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Professional Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="DepartmentId" class="form-label"></label>
+                                <select asp-for="DepartmentId" class="form-select" asp-items="ViewBag.DepartmentId">
+                                    <option value="">Select Department</option>
+                                </select>
+                                <span asp-validation-for="DepartmentId" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="RoleId" class="form-label"></label>
+                                <select asp-for="RoleId" class="form-select" asp-items="ViewBag.RoleId">
+                                    <option value="">Select Role</option>
+                                </select>
+                                <span asp-validation-for="RoleId" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="StateId" class="form-label"></label>
+                                <select asp-for="StateId" class="form-select" asp-items="ViewBag.StateId" id="stateDropdown">
+                                    <option value="">Select State</option>
+                                </select>
+                                <span asp-validation-for="StateId" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="CityId" class="form-label"></label>
+                                <select asp-for="CityId" class="form-select" id="cityDropdown">
+                                    <option value="">Select City</option>
+                                </select>
+                                <span asp-validation-for="CityId" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="JoiningDate" class="form-label"></label>
+                                <input asp-for="JoiningDate" class="form-control" type="date" />
+                                <span asp-validation-for="JoiningDate" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="IsActive" class="form-label">Active status</label>
+                                <div class="form-check">
+                                    <input asp-for="IsActive" class="form-check-input" />
+                                    <label class="form-check-label" asp-for="IsActive">Active</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Skills Section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Skills</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    @foreach (var skill in skills)
+                    {
+                        <div class="col-md-3 mb-2">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" name="SelectedSkills"
+                                       value="@skill.Id" id="@skill.Id"
+                                @(Model.Skills != null && Model.Skills.Contains(skill.Id) ? "checked" : "") />
+                                <label class="form-check-label" for="@skill.Id">@skill.Name</label>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile Picture -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Profile Picture</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        @if (!string.IsNullOrEmpty(Model.ProfilePicture))
+                        {
+                            <div class="mb-3">
+                                <img src="@Model.ProfilePicture" alt="Current Profile Picture" class="img-thumbnail" style="max-width: 200px" />
+                            </div>
+                        }
+                        <input type="file" name="profileImage" class="form-control" accept="image/*" />
+                        <small class="text-muted">Leave empty to keep the current profile picture</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+                <a asp-action="Index" class="btn btn-secondary">Back to List</a>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+
+    <script>
+        $(document).ready(function () {
+            // Load cities for the initial state
+            if ($('#stateDropdown').val()) {
+                loadCities($('#stateDropdown').val(), '@Model.CityId');
+            }
+
+            // Handle state-city dropdown dependency
+            $('#stateDropdown').change(function () {
+                var stateId = $(this).val();
+                if (stateId) {
+                    loadCities(stateId);
+                } else {
+                    $('#cityDropdown').empty().append($('<option></option>').val('').text('Select City'));
+                }
+            });
+
+            function loadCities(stateId, selectedCityId = null) {
+                $.get('/Employees/GetCitiesByState', { stateId: stateId }, function (data) {
+                    var cityDropdown = $('#cityDropdown');
+                    cityDropdown.empty();
+                    cityDropdown.append($('<option></option>').val('').text('Select City'));
+                    $.each(data, function (i, city) {
+                        var option = $('<option></option>').val(city.value).text(city.text);
+                        if (selectedCityId && city.value == selectedCityId) {
+                            option.prop('selected', true);
+                        }
+                        cityDropdown.append(option);
+                    });
+                });
+            }
+
+            // Handle skills selection
+            $('input[name="SelectedSkills"]').change(function () {
+                var selectedSkills = [];
+                $('input[name="SelectedSkills"]:checked').each(function () {
+                    selectedSkills.push($(this).val());
+                });
+                $('#Skills').val(selectedSkills.join(','));
+            });
+        });
+    </script>
+}

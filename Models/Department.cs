@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 
 namespace ETS_CRUD_DEMO.Models
 {
@@ -9,6 +10,7 @@ namespace ETS_CRUD_DEMO.Models
 
         [Required]
         [MaxLength(100)]
+        [DisplayName("Department")]
         public string DepartmentName { get; set; }
 
         [MaxLength(500)]

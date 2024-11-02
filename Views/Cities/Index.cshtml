@@ -1,0 +1,152 @@
+﻿@model IEnumerable<ETS_CRUD_DEMO.Models.City>
+@{
+    ViewData["Title"] = "Cities";
+}
+
+<!-- Add DataTables CSS -->
+<link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+<link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet">
+
+<div class="container-fluid">
+    <h1 class="mb-2">Cities</h1>
+
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+            <a href="@Url.Action("Create")" class="text-primary">Add New</a>
+        </div>
+        <div class="d-flex gap-3 align-items-center">
+            <div class="search-container">
+                <input type="text" id="customSearch" class="form-control" placeholder="Search cities..." style="width: 250px;">
+            </div>
+            <form id="importForm" asp-action="Import" method="post" enctype="multipart/form-data" class="d-inline">
+                <input type="file" id="importFile" name="file" accept=".csv, .xlsx" class="d-none" />
+                <button type="button" onclick="triggerFileInput()" class="btn btn-secondary">Import</button>
+            </form>
+            @* <form asp-action="Import" enctype="multipart/form-data" method="post" class="d-inline me-2">
+            <input type="file" name="file" accept=".csv, .xlsx" class="form-control-file d-inline">
+            <button type="submit" class="btn btn-secondary ms-2">Import from CSV/Excel</button>
+            </form> *@
+
+            <a href="@Url.Action("Export")" class="btn btn-success">Export</a>
+        </div>
+    </div>
+
+    <table id="citiesTable" class="table" width="100%">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>@Html.DisplayNameFor(model => model.CityName)</th>
+                <th>@Html.DisplayNameFor(model => model.State)</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model.Select((value, index) => new { value, index }))
+            {
+                <tr>
+                    <td>@(item.index + 1)</td>
+                    <td>@Html.DisplayFor(modelItem => item.value.CityName)</td>
+                    <td>@Html.DisplayFor(modelItem => item.value.State.StateName)</td>
+                    <td>
+                        <a asp-action="Edit" asp-route-id="@item.value.CityId">Edit</a> |
+                        <a asp-action="Details" asp-route-id="@item.value.CityId">Details</a> |
+                        <a asp-action="Delete" asp-route-id="@item.value.CityId">Delete</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@section Scripts {
+    <!-- Add DataTables JS -->
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
+
+    <script>
+        let dataTable;
+
+        $(document).ready(function () {
+            dataTable = $('#citiesTable').DataTable({
+                responsive: true,
+                dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6">>rtip', // Removed default search
+                lengthMenu: [
+                    [7, 10, 25, 50, -1],
+                    ['7 rows', '10 rows', '25 rows', '50 rows', 'Show all']
+                ],
+                pageLength: 7,
+                order: [[0, 'asc']],
+                columnDefs: [
+                    {
+                        targets: -1,
+                        orderable: false,
+                        searchable: false
+                    }
+                ],
+                language: {
+                    lengthMenu: "_MENU_",
+                },
+                initComplete: function () {
+                    // Add custom filter for states
+                    this.api().columns(2).every(function () {
+                        var column = this;
+                        var select = $('<select class="form-select form-select-sm"><option value="">All States</option></select>')
+                            .appendTo($(column.header()))
+                            .on('change', function () {
+                                var val = $.fn.dataTable.util.escapeRegex(
+                                    $(this).val()
+                                );
+                                column
+                                    .search(val ? '^' + val + '$' : '', true, false)
+                                    .draw();
+                            });
+
+                        column.data().unique().sort().each(function (d, j) {
+                            select.append('<option value="' + d + '">' + d + '</option>')
+                        });
+                    });
+                }
+            });
+
+            // Custom search functionality
+            $('#customSearch').on('keyup', function () {
+                dataTable.search(this.value).draw();
+            });
+        });
+
+        function triggerFileInput() {
+            const input = document.getElementById('importFile');
+            input.click();
+            input.onchange = function (e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    $.ajax({
+                        url: '@Url.Action("Import")',
+                        type: 'POST',
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        success: function (response) {
+                            alert('Data imported successfully');
+                            location.reload();
+                        },
+                        error: function (xhr) {
+                            let errorMessage = "Error importing file";
+                            if (xhr.responseJSON && xhr.responseJSON.title) {
+                                errorMessage = xhr.responseJSON.title;
+                            } else if (xhr.responseText) {
+                                errorMessage = xhr.responseText;
+                            }
+                            alert(errorMessage);
+                        }
+                    });
+                }
+            };
+        }
+    </script>
+}
