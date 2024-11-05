@@ -15,7 +15,10 @@ using CsvHelper;
 using CsvReader = CsvHelper.CsvReader;
 using CsvWriter = CsvHelper.CsvWriter;
 using ETS_CRUD_DEMO.Enums;
-using Microsoft.AspNetCore.Authorization; // For handling CSV files
+using NPOI.SS.UserModel;
+using NPOI.XSSF.UserModel;
+using Microsoft.AspNetCore.Authorization;
+using System.Text.RegularExpressions; // For handling CSV files
 
 namespace ETS_CRUD_DEMO.Controllers
 {
@@ -212,114 +215,273 @@ namespace ETS_CRUD_DEMO.Controllers
         [HttpPost]
         public async Task<IActionResult> ImportEmployees(IFormFile file)
         {
-            if (file != null && (file.ContentType == "text/csv" || file.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+            if (file == null || !(file.ContentType == "text/csv" || file.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
             {
-                using var stream = new MemoryStream();
-                await file.CopyToAsync(stream);
-
-                var employees = new List<Employee>();
-
-                if (file.ContentType == "text/csv")
-                {
-                    // Handle CSV file
-                    stream.Position = 0;
-                    using var reader = new StreamReader(stream);
-                    using var csv = new CsvReader(reader, CultureInfo.InvariantCulture);
-
-                    // Check if the header contains required columns
-                    csv.Read();
-                    csv.ReadHeader();
-                    var headerRow = csv.HeaderRecord;
-
-                    var requiredColumns = new List<string> { "FirstName", "LastName", "Email", "PhoneNumber", "Gender", "DOB", "Skills", "Department", "Role", "IsActive", "State", "City", "JoiningDate" };
-                    var missingColumns = requiredColumns.Where(column => !headerRow.Contains(column)).ToList();
-
-                    if (missingColumns.Any())
-                    {
-                        return BadRequest($"Missing required columns: {string.Join(", ", missingColumns)}.");
-                    }
-
-                    while (csv.Read())
-                    {
-                        var employee = new Employee
-                        {
-                            EmployeeId = Guid.NewGuid(), // Generate a new ID
-                            FirstName = csv.GetField<string>("FirstName"),
-                            LastName = csv.GetField<string>("LastName"),
-                            Email = csv.GetField<string>("Email"),
-                            PhoneNumber = csv.GetField<string>("PhoneNumber"),
-                            Gender = Enum.TryParse<GenderOptions>(csv.GetField<string>("Gender"), true, out var gender) ? gender : GenderOptions.Other,
-                            DOB = DateTime.Parse(csv.GetField<string>("DOB")),
-                            Skills = csv.GetField<string>("Skills")?.Split(';').ToList(),
-                            IsActive = bool.Parse(csv.GetField<string>("IsActive")),
-                            JoiningDate = DateTime.Parse(csv.GetField<string>("JoiningDate")),
-                            // Get IDs for Department, Role, State, and City
-                            DepartmentId = await GetDepartmentIdAsync(csv.GetField<string>("Department")),
-                            RoleId = await GetRoleIdAsync(csv.GetField<string>("Role")),
-                            StateId = await GetStateIdAsync(csv.GetField<string>("State")),
-                            CityId = await GetCityIdAsync(csv.GetField<string>("City"))
-                        };
-                        employees.Add(employee);
-                    }
-
-                    // Save employees to the database
-                    await _context.Employees.AddRangeAsync(employees);
-                    await _context.SaveChangesAsync();
-                }
-                else if (file.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                {
-                    // Handle Excel file
-                    stream.Position = 0;
-                    using var package = new ExcelPackage(stream);
-                    var worksheet = package.Workbook.Worksheets[0];
-
-                    var requiredColumns = new List<string> { "FirstName", "LastName", "Email", "PhoneNumber", "Gender", "DOB", "Skills", "Department", "Role", "IsActive", "State", "City", "JoiningDate" };
-
-                    // Check if the first row contains required columns
-                    var headerRow = new List<string>();
-                    for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
-                    {
-                        headerRow.Add(worksheet.Cells[1, col].Text);
-                    }
-
-                    var missingColumns = requiredColumns.Where(column => !headerRow.Contains(column)).ToList();
-
-                    if (missingColumns.Any())
-                    {
-                        return BadRequest($"Missing required columns: {string.Join(", ", missingColumns)}.");
-                    }
-
-                    for (int row = 2; row <= worksheet.Dimension.End.Row; row++)
-                    {
-                        var employee = new Employee
-                        {
-                            EmployeeId = Guid.NewGuid(), // Generate a new ID
-                            FirstName = worksheet.Cells[row, 1].Text,
-                            LastName = worksheet.Cells[row, 2].Text,
-                            Email = worksheet.Cells[row, 3].Text,
-                            PhoneNumber = worksheet.Cells[row, 4].Text,
-                            Gender = Enum.TryParse<GenderOptions>(worksheet.Cells[row, 5].Text, true, out var gender) ? gender : GenderOptions.Other,
-                            DOB = DateTime.Parse(worksheet.Cells[row, 6].Text),
-                            Skills = worksheet.Cells[row, 7].Text?.Split(';').ToList(),
-                            IsActive = bool.Parse(worksheet.Cells[row, 10].Text),
-                            JoiningDate = DateTime.Parse(worksheet.Cells[row, 13].Text),
-                            // Get IDs for Department, Role, State, and City
-                            DepartmentId = await GetDepartmentIdAsync(worksheet.Cells[row, 8].Text),
-                            RoleId = await GetRoleIdAsync(worksheet.Cells[row, 9].Text),
-                            StateId = await GetStateIdAsync(worksheet.Cells[row, 11].Text),
-                            CityId = await GetCityIdAsync(worksheet.Cells[row, 12].Text)
-                        };
-                        employees.Add(employee);
-                    }
-
-                    // Save employees to the database
-                    await _context.Employees.AddRangeAsync(employees);
-                    await _context.SaveChangesAsync();
-                }
-                return RedirectToAction(nameof(Index));
+                return BadRequest("Invalid file format.");
             }
-            return BadRequest("Invalid file format.");
+
+            using var stream = new MemoryStream();
+            await file.CopyToAsync(stream);
+
+            var employees = new List<Employee>();
+            var errorMessages = new List<string>();
+
+            if (file.ContentType == "text/csv")
+            {
+                // CSV file processing
+                stream.Position = 0;
+                using var reader = new StreamReader(stream);
+                using var csv = new CsvReader(reader, CultureInfo.InvariantCulture);
+
+                csv.Read();
+                csv.ReadHeader();
+                var headerRow = csv.HeaderRecord;
+
+                var requiredColumns = new List<string> { "FirstName", "LastName", "Email", "PhoneNumber", "Gender", "DOB", "Skills", "Department", "Role", "IsActive", "State", "City", "JoiningDate" };
+                var missingColumns = requiredColumns.Where(column => !headerRow.Contains(column)).ToList();
+
+                if (missingColumns.Any())
+                {
+                    return BadRequest($"Missing required columns: {string.Join(", ", missingColumns)}.");
+                }
+
+                while (csv.Read())
+                {
+                    try
+                    {
+                        var employee = new Employee
+                        {
+                            EmployeeId = Guid.NewGuid(),
+                            FirstName = ValidateString(csv.GetField<string>("FirstName")),
+                            LastName = ValidateString(csv.GetField<string>("LastName")),
+                            Email = ValidateEmail(csv.GetField<string>("Email")),
+                            PhoneNumber = ValidatePhoneNumber(csv.GetField<string>("PhoneNumber")),
+                            Gender = ValidateGender(csv.GetField<string>("Gender")),
+                            DOB = ValidateDate(csv.GetField<string>("DOB")),
+                            Skills = csv.GetField<string>("Skills")?.Split(';').ToList(),
+                            IsActive = ValidateBoolean(csv.GetField<string>("IsActive")),
+                            JoiningDate = ValidateDate(csv.GetField<string>("JoiningDate")),
+                            DepartmentId = await GetDepartmentIdAsync(ValidateString(csv.GetField<string>("Department"))),
+                            RoleId = await GetRoleIdAsync(ValidateString(csv.GetField<string>("Role"))),
+                            StateId = await GetStateIdAsync(ValidateString(csv.GetField<string>("State"))),
+                            CityId = await GetCityIdAsync(ValidateString(csv.GetField<string>("City")))
+                        };
+                        employees.Add(employee);
+                    }
+                    catch (Exception ex)
+                    {
+                        errorMessages.Add($"Error processing row {csv.Context.Parser.Row}: {ex.Message}");
+                    }
+                }
+            }
+            else if (file.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            {
+                // Excel file processing with NPOI
+                stream.Position = 0;
+                IWorkbook workbook = new XSSFWorkbook(stream);
+                ISheet sheet = workbook.GetSheetAt(0);
+
+                var requiredColumns = new List<string> { "FirstName", "LastName", "Email", "PhoneNumber", "Gender", "DOB", "Skills", "Department", "Role", "IsActive", "State", "City", "JoiningDate" };
+                var headerRow = sheet.GetRow(0);
+                var headerCells = new List<string>();
+
+                for (int i = 0; i < headerRow.LastCellNum; i++)
+                {
+                    headerCells.Add(headerRow.GetCell(i).StringCellValue);
+                }
+
+                var missingColumns = requiredColumns.Where(column => !headerCells.Contains(column)).ToList();
+                if (missingColumns.Any())
+                {
+                    return BadRequest($"Missing required columns: {string.Join(", ", missingColumns)}.");
+                }
+
+                for (int row = 1; row <= sheet.LastRowNum; row++)
+                {
+                    var rowData = sheet.GetRow(row);
+                    if (rowData == null) continue;
+
+                    try
+                    {
+                        var employee = new Employee
+                        {
+                            EmployeeId = Guid.NewGuid(),
+                            FirstName = ValidateString(rowData.GetCell(0)?.ToString()),
+                            LastName = ValidateString(rowData.GetCell(1)?.ToString()),
+                            Email = ValidateEmail(rowData.GetCell(2)?.ToString()),
+                            PhoneNumber = ValidatePhoneNumber(rowData.GetCell(3)?.ToString()),
+                            Gender = ValidateGender(rowData.GetCell(4)?.ToString()),
+                            DOB = ValidateDate(rowData.GetCell(5)?.ToString()),
+                            Skills = rowData.GetCell(6)?.ToString()?.Split(';').ToList(),
+                            IsActive = ValidateBoolean(rowData.GetCell(9)?.ToString()),
+                            JoiningDate = ValidateDate(rowData.GetCell(12)?.ToString()),
+                            DepartmentId = await GetDepartmentIdAsync(ValidateString(rowData.GetCell(7)?.ToString())),
+                            RoleId = await GetRoleIdAsync(ValidateString(rowData.GetCell(8)?.ToString())),
+                            StateId = await GetStateIdAsync(ValidateString(rowData.GetCell(10)?.ToString())),
+                            CityId = await GetCityIdAsync(ValidateString(rowData.GetCell(11)?.ToString()))
+                        };
+                        employees.Add(employee);
+                    }
+                    catch (Exception ex)
+                    {
+                        errorMessages.Add($"Error processing row {row + 1}: {ex.Message}");
+                    }
+                }
+            }
+
+            if (errorMessages.Any())
+            {
+                return BadRequest($"Errors occurred during import:\n{string.Join("\n", errorMessages)}");
+            }
+
+            await _context.Employees.AddRangeAsync(employees);
+            await _context.SaveChangesAsync();
+
+            return RedirectToAction(nameof(Index));
         }
+
+        // Helper validation methods
+        private string ValidateString(string input)
+        {
+            return !string.IsNullOrWhiteSpace(input) ? input : throw new Exception("Invalid string value.");
+        }
+
+        private string ValidateEmail(string input)
+        {
+            return input.Contains("@") ? input : throw new Exception("Invalid email format.");
+        }
+
+        private string ValidatePhoneNumber(string input)
+        {
+            return Regex.IsMatch(input, @"^\d{10}$") ? input : throw new Exception("Invalid phone number format.");
+        }
+
+        private GenderOptions ValidateGender(string input)
+        {
+            return Enum.TryParse<GenderOptions>(input, true, out var gender) ? gender : throw new Exception("Invalid gender value.");
+        }
+
+        private DateTime ValidateDate(string input)
+        {
+            return DateTime.TryParse(input, out var date) ? date : throw new Exception("Invalid date format.");
+        }
+
+        private bool ValidateBoolean(string input)
+        {
+            return bool.TryParse(input, out var value) ? value : throw new Exception("Invalid boolean value.");
+        }
+
+        //[HttpPost]
+        //public async Task<IActionResult> ImportEmployees(IFormFile file)
+        //{
+        //    if (file != null && (file.ContentType == "text/csv" || file.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        //    {
+        //        using var stream = new MemoryStream();
+        //        await file.CopyToAsync(stream);
+
+        //        var employees = new List<Employee>();
+
+        //        if (file.ContentType == "text/csv")
+        //        {
+        //            // Handle CSV file
+        //            stream.Position = 0;
+        //            using var reader = new StreamReader(stream);
+        //            using var csv = new CsvReader(reader, CultureInfo.InvariantCulture);
+
+        //            // Check if the header contains required columns
+        //            csv.Read();
+        //            csv.ReadHeader();
+        //            var headerRow = csv.HeaderRecord;
+
+        //            var requiredColumns = new List<string> { "FirstName", "LastName", "Email", "PhoneNumber", "Gender", "DOB", "Skills", "Department", "Role", "IsActive", "State", "City", "JoiningDate" };
+        //            var missingColumns = requiredColumns.Where(column => !headerRow.Contains(column)).ToList();
+
+        //            if (missingColumns.Any())
+        //            {
+        //                return BadRequest($"Missing required columns: {string.Join(", ", missingColumns)}.");
+        //            }
+
+        //            while (csv.Read())
+        //            {
+        //                var employee = new Employee
+        //                {
+        //                    EmployeeId = Guid.NewGuid(), // Generate a new ID
+        //                    FirstName = csv.GetField<string>("FirstName"),
+        //                    LastName = csv.GetField<string>("LastName"),
+        //                    Email = csv.GetField<string>("Email"),
+        //                    PhoneNumber = csv.GetField<string>("PhoneNumber"),
+        //                    Gender = Enum.TryParse<GenderOptions>(csv.GetField<string>("Gender"), true, out var gender) ? gender : GenderOptions.Other,
+        //                    DOB = DateTime.Parse(csv.GetField<string>("DOB")),
+        //                    Skills = csv.GetField<string>("Skills")?.Split(';').ToList(),
+        //                    IsActive = bool.Parse(csv.GetField<string>("IsActive")),
+        //                    JoiningDate = DateTime.Parse(csv.GetField<string>("JoiningDate")),
+        //                    // Get IDs for Department, Role, State, and City
+        //                    DepartmentId = await GetDepartmentIdAsync(csv.GetField<string>("Department")),
+        //                    RoleId = await GetRoleIdAsync(csv.GetField<string>("Role")),
+        //                    StateId = await GetStateIdAsync(csv.GetField<string>("State")),
+        //                    CityId = await GetCityIdAsync(csv.GetField<string>("City"))
+        //                };
+        //                employees.Add(employee);
+        //            }
+
+        //            // Save employees to the database
+        //            await _context.Employees.AddRangeAsync(employees);
+        //            await _context.SaveChangesAsync();
+        //        }
+        //        else if (file.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        //        {
+        //            // Handle Excel file
+        //            stream.Position = 0;
+        //            using var package = new ExcelPackage(stream);
+        //            var worksheet = package.Workbook.Worksheets[0];
+
+        //            var requiredColumns = new List<string> { "FirstName", "LastName", "Email", "PhoneNumber", "Gender", "DOB", "Skills", "Department", "Role", "IsActive", "State", "City", "JoiningDate" };
+
+        //            // Check if the first row contains required columns
+        //            var headerRow = new List<string>();
+        //            for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
+        //            {
+        //                headerRow.Add(worksheet.Cells[1, col].Text);
+        //            }
+
+        //            var missingColumns = requiredColumns.Where(column => !headerRow.Contains(column)).ToList();
+
+        //            if (missingColumns.Any())
+        //            {
+        //                return BadRequest($"Missing required columns: {string.Join(", ", missingColumns)}.");
+        //            }
+
+        //            for (int row = 2; row <= worksheet.Dimension.End.Row; row++)
+        //            {
+        //                var employee = new Employee
+        //                {
+        //                    EmployeeId = Guid.NewGuid(), // Generate a new ID
+        //                    FirstName = worksheet.Cells[row, 1].Text,
+        //                    LastName = worksheet.Cells[row, 2].Text,
+        //                    Email = worksheet.Cells[row, 3].Text,
+        //                    PhoneNumber = worksheet.Cells[row, 4].Text,
+        //                    Gender = Enum.TryParse<GenderOptions>(worksheet.Cells[row, 5].Text, true, out var gender) ? gender : GenderOptions.Other,
+        //                    DOB = DateTime.Parse(worksheet.Cells[row, 6].Text),
+        //                    Skills = worksheet.Cells[row, 7].Text?.Split(';').ToList(),
+        //                    IsActive = bool.Parse(worksheet.Cells[row, 10].Text),
+        //                    JoiningDate = DateTime.Parse(worksheet.Cells[row, 13].Text),
+        //                    // Get IDs for Department, Role, State, and City
+        //                    DepartmentId = await GetDepartmentIdAsync(worksheet.Cells[row, 8].Text),
+        //                    RoleId = await GetRoleIdAsync(worksheet.Cells[row, 9].Text),
+        //                    StateId = await GetStateIdAsync(worksheet.Cells[row, 11].Text),
+        //                    CityId = await GetCityIdAsync(worksheet.Cells[row, 12].Text)
+        //                };
+        //                employees.Add(employee);
+        //            }
+
+        //            // Save employees to the database
+        //            await _context.Employees.AddRangeAsync(employees);
+        //            await _context.SaveChangesAsync();
+        //        }
+        //        return RedirectToAction(nameof(Index));
+        //    }
+        //    return BadRequest("Invalid file format.");
+        //}
 
 
 
@@ -573,7 +735,7 @@ namespace ETS_CRUD_DEMO.Controllers
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         [Authorize(Policy = "CanUpdate")]
-
+            
 
         public async Task<IActionResult> DeleteConfirmed(Guid id)
         {

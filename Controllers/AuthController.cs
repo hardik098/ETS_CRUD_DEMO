@@ -54,13 +54,13 @@ namespace ETS_CRUD_DEMO.Controllers
                 return View(model);
             }
 
-            var (success, message) = await _verificationService.SendOTPEmail(model.Email);
+            //var (success, message) = await _verificationService.SendOTPEmail(model.Email);
 
-            if (!success)
-            {
-                ModelState.AddModelError("", message);
-                return View(model);
-            }
+            //if (!success)
+            //{
+            //    ModelState.AddModelError("", message);
+            //    return View(model);
+            //}
 
             TempData["SuccessMessage"] = "OTP has been sent to your email address.";
             return RedirectToAction("VerifyOTP", new { email = model.Email });
@@ -85,13 +85,13 @@ namespace ETS_CRUD_DEMO.Controllers
             if (!ModelState.IsValid)
                 return View(model);
 
-            var (success, message) = await _verificationService.VerifyOTP(model.Email, model.OTP);
+            //var (success, message) = await _verificationService.VerifyOTP(model.Email, model.OTP);
 
-            if (!success)
-            {
-                ModelState.AddModelError("", message);
-                return View(model);
-            }
+            //if (!success)
+            //{
+            //    ModelState.AddModelError("", message);
+            //    return View(model);
+            //}
 
             var employee = await _context.Employees
                 .AsNoTracking()
