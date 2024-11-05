@@ -12,6 +12,7 @@ namespace ETS_CRUD_DEMO.Services.Implementations
         private readonly MailgunSettings _mailgunSettings;
         private readonly ILogger<MailgunEmailService> _logger;
 
+
         public MailgunEmailService(
           IOptions<MailgunSettings> mailgunSettings,
           ILogger<MailgunEmailService> logger)

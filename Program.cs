@@ -1,19 +1,34 @@
 using ETS_CRUD_DEMO.Data;
 using ETS_CRUD_DEMO.Models;
+using ETS_CRUD_DEMO.Repository.Interfaces;
+using ETS_CRUD_DEMO.Repository.Repositories;
 using ETS_CRUD_DEMO.Services.Implementations;
 using ETS_CRUD_DEMO.Services.Interfaces;
+using MediatR;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using OfficeOpenXml;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
 // Set the license context for EPPlus
 ExcelPackage.LicenseContext = LicenseContext.NonCommercial; // or LicenseContext.Commercial
 
+// Add session services
+builder.Services.AddDistributedMemoryCache(); // Required for session management
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(15);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true; // Ensure the session cookie is created even when the user hasn't consented to non-essential cookies.
+});
 
+// Add services to the container.
+builder.Services.AddControllersWithViews();
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("db_connection"), op => op.CommandTimeout(60)));
+
+// Configure authentication
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -24,7 +39,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.ExpireTimeSpan = TimeSpan.FromHours(12);
 
-        //Added
+        // Set headers for redirect events
         options.Events.OnRedirectToAccessDenied = context =>
         {
             context.Response.Headers["X-Content-Type-Options"] = "nosniff";
@@ -42,8 +57,6 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     });
 
 // Add authorization policies
-
-
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("CanCreate", policy => policy.RequireRole("Admin"));
@@ -51,31 +64,29 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanUpdate", policy => policy.RequireRole("Admin"));
 });
 
-
-
+// Configure Mailgun settings
 builder.Services.Configure<MailgunSettings>(builder.Configuration.GetSection("Mailgun"));
 
-builder.Services.AddSingleton<IEmailService, MailgunEmailService>();
-builder.Services.AddSingleton<IVerificationService, MailGunVerificationService>();
 
 
-builder.Services.AddControllersWithViews();
-builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("db_connection")));
+// Add repository and services
+builder.Services.AddTransient<IEmailService, MailgunEmailService>();
+builder.Services.AddTransient<IVerificationService, MailGunVerificationService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
-
 app.UseRouting();
-
+app.UseSession(); // Add this line to enable session management
+app.UseAuthentication(); // Ensure authentication middleware is included
 app.UseAuthorization();
 
 app.MapControllerRoute(

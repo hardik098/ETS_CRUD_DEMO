@@ -19,24 +19,14 @@
             <div class="search-container">
                 <input type="text" id="customSearch" class="form-control" placeholder="Search employees..." style="width: 250px;">
             </div>
-            <form id="importForm" asp-action="ImportEmployees" method="post" enctype="multipart/form-data" class="d-inline">
+            <form id="importForm" asp-action="ImportCsv" method="post" enctype="multipart/form-data" class="d-inline">
                 <input type="file" id="importFile" name="file" accept=".csv, .xlsx" class="d-none" />
                 <button type="button" onclick="triggerFileInput()" class="btn btn-secondary">Import</button>
-                @* @if (TempData["ErrorMessage"] != null)
-                {
-                    <div class="alert alert-danger">
-                        <pre>@TempData["ErrorMessage"]</pre>
-                    </div>
-                }
-
-                @if (TempData["SuccessMessage"] != null)
-                {
-                    <div class="alert alert-success">
-                        @TempData["SuccessMessage"]
-                    </div>
-                } *@
             </form>
-            <a href="@Url.Action("ExportEmployees")" class="btn btn-info">Export</a>
+            @* <a href="@Url.Action("ExportEmployees")" class="btn btn-info">Export</a> *@
+
+            <a asp-action="ExportCsv" class="btn btn-primary">Export to CSV</a>
+
         </div>
     </div>
 
@@ -86,17 +76,23 @@
                     <td>@Html.DisplayFor(modelItem => item.value.City.CityName)</td>
                     <td>@item.value.JoiningDate.ToString("dd-MM-yyyy")</td>
                     <td class="action-buttons">
-                        <a asp-action="Edit" asp-route-id="@item.value.EmployeeId">Edit</a> |
-                        <a asp-action="Details" asp-route-id="@item.value.EmployeeId">Details</a> |
-                        <a asp-action="Delete" asp-route-id="@item.value.EmployeeId">Delete</a>
+                        @* Role-based rendering *@
+                        @if (User.IsInRole("Admin"))
+                        {
+                            <a asp-action="Edit" asp-route-id="@item.value.EmployeeId">Edit</a> <span> | </span>
+                            <a asp-action="Delete" asp-route-id="@item.value.EmployeeId">Delete</a> <span> | </span>
+                            <a asp-action = "Details" asp-route-id = "@item.value.EmployeeId"> Details </a>
+                        }
+                        else if (User.IsInRole("Sub-admin"))
+                        {
+                            <a asp-action="Details" asp-route-id="@item.value.EmployeeId">Details</a>
+                        }
                     </td>
                 </tr>
             }
         </tbody>
     </table>
 </div>
-
-
 
 @section Scripts {
     <!-- DataTables JavaScript -->
@@ -146,17 +142,26 @@
                     formData.append('file', file);
 
                     $.ajax({
-                        url: '@Url.Action("ImportEmployees")',
+                        url: '@Url.Action("ImportCsv")',
                         type: 'POST',
                         data: formData,
                         processData: false,
                         contentType: false,
                         success: function (response) {
-                            alert('Data imported successfully');
-                            location.reload();
+                            if (response.includes('<!DOCTYPE html>') || response.includes('<html')) {
+                                // Replace current page content with error page
+                                document.documentElement.innerHTML = response;
+                            } else if (response.success === true) {
+                                alert('Data imported successfully');
+                                location.reload();
+                            }
                         },
                         error: function (xhr, status, error) {
-                            alert('Error importing file: ' + xhr.responseText);
+                            if (xhr.responseText.includes('<!DOCTYPE html>') || xhr.responseText.includes('<html')) {
+                                document.documentElement.innerHTML = xhr.responseText;
+                            } else {
+                                alert('Error importing file: ' + error);
+                            }
                         }
                     });
                 }

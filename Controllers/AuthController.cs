@@ -49,7 +49,7 @@ namespace ETS_CRUD_DEMO.Controllers
 
             if (employee == null)
             {
-                
+
                 ModelState.AddModelError("", "Email address not found.");
                 return View(model);
             }
@@ -100,12 +100,12 @@ namespace ETS_CRUD_DEMO.Controllers
 
             // Create claims for the authenticated user
             var claims = new List<Claim>
-            {
-                new Claim(ClaimTypes.Email, employee.Email),
-                new Claim(ClaimTypes.Name, $"{employee.FirstName} {employee.LastName}"),
-                new Claim(ClaimTypes.NameIdentifier, employee.EmployeeId.ToString()),
-                new Claim(ClaimTypes.Role, employee.Role?.RoleName.ToString() ?? "")
-            };
+              {
+                  new Claim(ClaimTypes.Email, employee.Email),
+                  new Claim(ClaimTypes.Name, $"{employee.FirstName} {employee.LastName}"),
+                  new Claim(ClaimTypes.NameIdentifier, employee.EmployeeId.ToString()),
+                  new Claim(ClaimTypes.Role, employee.Role?.RoleName.ToString() ?? "")
+              };
 
             var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
             var authProperties = new AuthenticationProperties
@@ -118,6 +118,9 @@ namespace ETS_CRUD_DEMO.Controllers
                 CookieAuthenticationDefaults.AuthenticationScheme,
                 new ClaimsPrincipal(claimsIdentity),
                 authProperties);
+
+            // Set session data for non-sensitive information
+            HttpContext.Session.SetString("UserRole", employee.Role?.RoleName ?? "Employee");
 
             return RedirectToAction("Index", "Employees");
         }
@@ -148,8 +151,17 @@ namespace ETS_CRUD_DEMO.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()
         {
+            /*await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return RedirectToAction("Login","Auth");*/
+
+            // Clear the session
+            /* HttpContext.Session.Clear();
+             return RedirectToAction("Login");*/
+
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return RedirectToAction("Login","Auth");
+            HttpContext.Session.Clear();  // Clear session data on logout
+            return RedirectToAction("Login", "Auth");
+
         }
 
         [HttpGet]
