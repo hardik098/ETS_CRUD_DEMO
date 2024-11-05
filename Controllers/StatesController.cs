@@ -10,9 +10,12 @@ using ETS_CRUD_DEMO.Models;
 using System.Globalization;
 using OfficeOpenXml;
 using CsvHelper;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ETS_CRUD_DEMO.Controllers
 {
+    [Authorize]
+
     public class StatesController : Controller
     {
         private readonly ApplicationDbContext _context;

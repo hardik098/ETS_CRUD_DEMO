@@ -22,6 +22,19 @@
             <form id="importForm" asp-action="ImportEmployees" method="post" enctype="multipart/form-data" class="d-inline">
                 <input type="file" id="importFile" name="file" accept=".csv, .xlsx" class="d-none" />
                 <button type="button" onclick="triggerFileInput()" class="btn btn-secondary">Import</button>
+                @* @if (TempData["ErrorMessage"] != null)
+                {
+                    <div class="alert alert-danger">
+                        <pre>@TempData["ErrorMessage"]</pre>
+                    </div>
+                }
+
+                @if (TempData["SuccessMessage"] != null)
+                {
+                    <div class="alert alert-success">
+                        @TempData["SuccessMessage"]
+                    </div>
+                } *@
             </form>
             <a href="@Url.Action("ExportEmployees")" class="btn btn-info">Export</a>
         </div>
@@ -82,6 +95,8 @@
         </tbody>
     </table>
 </div>
+
+
 
 @section Scripts {
     <!-- DataTables JavaScript -->

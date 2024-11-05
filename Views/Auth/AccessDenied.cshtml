@@ -1,0 +1,32 @@
+﻿@{
+    ViewData["Title"] = "Access Denied";
+}
+
+<div class="container mt-5">
+    <div class="text-center">
+        <h1 class="display-4 text-danger">Access Denied</h1>
+        <p class="lead">
+            You do not have permission to view this page or perform this action.
+        </p>
+        <p>
+            Please contact the administrator if you believe this is an error.
+        </p>
+        <a href="~/Employees/Index" class="btn btn-primary mt-3">Return to Home</a>
+    </div>
+</div>
+
+<style>
+    .container {
+        max-width: 600px;
+        margin-top: 100px;
+    }
+
+    h1 {
+        font-size: 2.5rem;
+    }
+
+    .btn-primary {
+        padding: 10px 20px;
+        font-size: 1.1rem;
+    }
+</style>

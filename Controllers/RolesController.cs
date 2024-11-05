@@ -7,9 +7,11 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using ETS_CRUD_DEMO.Data;
 using ETS_CRUD_DEMO.Models;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ETS_CRUD_DEMO.Controllers
 {
+    [Authorize]
     public class RolesController : Controller
     {
         private readonly ApplicationDbContext _context;
@@ -24,6 +26,7 @@ namespace ETS_CRUD_DEMO.Controllers
         {
             return View(await _context.Roles.ToListAsync());
         }
+
 
         // GET: Roles/Details/5
         public async Task<IActionResult> Details(Guid? id)
@@ -43,6 +46,8 @@ namespace ETS_CRUD_DEMO.Controllers
             return View(role);
         }
 
+        [Authorize(Policy = "CanCreate")]
+
         // GET: Roles/Create
         public IActionResult Create()
         {
@@ -54,6 +59,8 @@ namespace ETS_CRUD_DEMO.Controllers
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
+
+
         public async Task<IActionResult> Create([Bind("RoleId,RoleName,Permissions")] Role role)
         {
             //if (ModelState.IsValid)
@@ -65,6 +72,9 @@ namespace ETS_CRUD_DEMO.Controllers
             }
             return View(role);
         }
+
+
+        [Authorize(Policy = "CanUpdate")]
 
         // GET: Roles/Edit/5
         public async Task<IActionResult> Edit(Guid? id)
@@ -87,6 +97,8 @@ namespace ETS_CRUD_DEMO.Controllers
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
+
+
         public async Task<IActionResult> Edit(Guid id, [Bind("RoleId,RoleName,Permissions")] Role role)
         {
             if (id != role.RoleId)
@@ -117,6 +129,9 @@ namespace ETS_CRUD_DEMO.Controllers
             return View(role);
         }
 
+
+        [Authorize(Policy = "CanUpdate")]
+
         // GET: Roles/Delete/5
         public async Task<IActionResult> Delete(Guid? id)
         {
@@ -138,6 +153,8 @@ namespace ETS_CRUD_DEMO.Controllers
         // POST: Roles/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
+
+
         public async Task<IActionResult> DeleteConfirmed(Guid id)
         {
             var role = await _context.Roles.FindAsync(id);
