@@ -7,9 +7,11 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using ETS_CRUD_DEMO.Data;
 using ETS_CRUD_DEMO.Models;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ETS_CRUD_DEMO.Controllers
 {
+    [Authorize]
     public class DepartmentsController : Controller
     {
         private readonly ApplicationDbContext _context;

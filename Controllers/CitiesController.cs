@@ -10,9 +10,11 @@ using ETS_CRUD_DEMO.Models;
 using OfficeOpenXml;
 using CsvHelper;
 using System.Globalization;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ETS_CRUD_DEMO.Controllers
 {
+    [Authorize]
     public class CitiesController : Controller
     {
         private readonly ApplicationDbContext _context;
@@ -28,6 +30,72 @@ namespace ETS_CRUD_DEMO.Controllers
             var applicationDbContext = _context.Cities.Include(c => c.State);
             return View(await applicationDbContext.ToListAsync());
         }
+
+        [HttpPost]
+        public async Task<IActionResult> GetCities([FromForm] DataTableParameters parameters)
+        {
+            // Base query including related data
+            var query = _context.Cities
+                .Include(c => c.State)
+                .Select(city => new
+                {
+                    city.CityId,
+                    city.CityName,
+                    StateName = city.State != null ? city.State.StateName : "N/A"
+                });
+
+            // Apply search filter if search value is present
+            if (!string.IsNullOrWhiteSpace(parameters.Search?.Value))
+            {
+                string searchValue = parameters.Search.Value.ToLower();
+                query = query.Where(city =>
+                    city.CityName.ToLower().Contains(searchValue) ||
+                    (city.StateName ?? "").ToLower().Contains(searchValue)
+                );
+            }
+
+            // Sorting
+            if (parameters.Order.Any())
+            {
+                var order = parameters.Order.First();
+                bool ascending = order.Dir == "asc";
+
+                query = order.Column switch
+                {
+                    1 => ascending ? query.OrderBy(c => c.CityName) : query.OrderByDescending(c => c.CityName),
+                    2 => ascending ? query.OrderBy(c => c.StateName) : query.OrderByDescending(c => c.StateName),
+                    _ => query // Ignore sorting on CityId if no valid column specified
+                };
+            }
+
+            // Total record count before pagination
+            int recordsTotal = await _context.Cities.CountAsync();
+
+            // Apply pagination
+            var data = await query
+                .Skip(parameters.Start)
+                .Take(parameters.Length)
+                .ToListAsync();
+
+            // Prepare result data
+            var resultData = data.Select(city => new
+            {
+                city.CityId,
+                city.CityName,
+                StateName = city.StateName
+            });
+
+            // Return data in JSON format expected by DataTables
+            return Json(new
+            {
+                draw = parameters.Draw,
+                recordsFiltered = recordsTotal,
+                recordsTotal = recordsTotal,
+                data = resultData
+            });
+        }
+
+
 
         // GET: Cities/Export
         public IActionResult Export()

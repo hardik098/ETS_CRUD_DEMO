@@ -41,6 +41,11 @@ namespace ETS_CRUD_DEMO.Data
                 .Property(e => e.Gender)
                 .HasConversion<string>(); // Store gender as a string in the database
 
+            // Set unique constraint for Email in the Employee entity
+            modelBuilder.Entity<Employee>()
+                .HasIndex(e => e.Email)
+                .IsUnique();
+
             // Configure Skills to be stored as JSON
             modelBuilder.Entity<Employee>()
                     .Property(e => e.Skills)

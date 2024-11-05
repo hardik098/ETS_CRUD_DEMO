@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Linq.Expressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -13,10 +14,13 @@ using OfficeOpenXml; // For handling Excel files
 using CsvHelper;
 using CsvReader = CsvHelper.CsvReader;
 using CsvWriter = CsvHelper.CsvWriter;
-using ETS_CRUD_DEMO.Enums; // For handling CSV files
+using ETS_CRUD_DEMO.Enums;
+using Microsoft.AspNetCore.Authorization; // For handling CSV files
 
 namespace ETS_CRUD_DEMO.Controllers
 {
+    [Authorize]
+
     public class EmployeesController : Controller
     {
         private readonly ApplicationDbContext _context;
@@ -27,13 +31,106 @@ namespace ETS_CRUD_DEMO.Controllers
             _webHostEnvironment = webHostEnvironment;
         }
 
+        [HttpGet]
         // GET: Employees
         public async Task<IActionResult> Index()
         {
             var applicationDbContext = _context.Employees.Include(e => e.City).Include(e => e.Department).Include(e => e.Role).Include(e => e.State);
             return View(await applicationDbContext.ToListAsync());
         }
+        [HttpPost]
+        public async Task<IActionResult> GetEmployees([FromForm] DataTableParameters parameters)
+        {
+            // Base query including related data
+            var query = _context.Employees
+                .Include(e => e.Department)
+                .Include(e => e.Role)
+                .Include(e => e.State)
+                .Include(e => e.City)
+                .Select(emp => new
+                {
+                    emp.EmployeeId,
+                    emp.FirstName,
+                    emp.LastName,
+                    DOB = emp.DOB,  // Keep as DateTime for sorting
+                    Department = emp.Department != null ? emp.Department.DepartmentName : "N/A",
+                    Role = emp.Role != null ? emp.Role.RoleName : "N/A",
+                    IsActive = emp.IsActive ? "Yes" : "No",
+                    State = emp.State != null ? emp.State.StateName : "N/A",
+                    City = emp.City != null ? emp.City.CityName : "N/A",
+                    JoiningDate = emp.JoiningDate // Keep as DateTime for sorting
+                });
 
+            // Apply search filter if search value is present
+            if (!string.IsNullOrWhiteSpace(parameters.Search?.Value))
+            {
+                string searchValue = parameters.Search.Value.ToLower();
+                query = query.Where(emp =>
+                    emp.FirstName.ToLower().Contains(searchValue) ||
+                    emp.LastName.ToLower().Contains(searchValue) ||
+                    (emp.Department ?? "").ToLower().Contains(searchValue) ||
+                    (emp.Role ?? "").ToLower().Contains(searchValue) ||
+                    (emp.State ?? "").ToLower().Contains(searchValue) ||
+                    (emp.City ?? "").ToLower().Contains(searchValue)
+                );
+            }
+
+            // Sorting
+            if (parameters.Order.Any())
+            {
+                var order = parameters.Order.First();
+                bool ascending = order.Dir == "asc";
+
+                query = order.Column switch
+                {
+                    1 => ascending ? query.OrderBy(e => e.FirstName) : query.OrderByDescending(e => e.FirstName),
+                    2 => ascending ? query.OrderBy(e => e.LastName) : query.OrderByDescending(e => e.LastName),
+                    3 => ascending ? query.OrderBy(e => e.DOB) : query.OrderByDescending(e => e.DOB),
+                    4 => ascending ? query.OrderBy(e => e.Department) : query.OrderByDescending(e => e.Department),
+                    5 => ascending ? query.OrderBy(e => e.Role) : query.OrderByDescending(e => e.Role),
+                    6 => ascending ? query.OrderBy(e => e.IsActive) : query.OrderByDescending(e => e.IsActive),
+                    7 => ascending ? query.OrderBy(e => e.State) : query.OrderByDescending(e => e.State),
+                    8 => ascending ? query.OrderBy(e => e.City) : query.OrderByDescending(e => e.City),
+                    9 => ascending ? query.OrderBy(e => e.JoiningDate) : query.OrderByDescending(e => e.JoiningDate),
+                    _ => query // Ignore sorting on EmployeeId if no valid column specified
+                };
+            }
+
+            // Total record count before pagination
+            int recordsTotal = await _context.Employees.CountAsync();
+
+            // Apply pagination
+            var data = await query
+                .Skip(parameters.Start)
+                .Take(parameters.Length)
+                .ToListAsync();
+
+            // Convert date fields to strings in the final data set
+            var resultData = data.Select(emp => new
+            {
+                emp.EmployeeId,
+                emp.FirstName,
+                emp.LastName,
+                DOB = emp.DOB.ToString("dd-MM-yyyy"),  // Format date as string
+                Department = emp.Department,
+                Role = emp.Role,
+                IsActive = emp.IsActive,
+                State = emp.State,
+                City = emp.City,
+                JoiningDate = emp.JoiningDate.ToString("dd-MM-yyyy")  // Format date as string
+            });
+
+            // Return data in JSON format expected by DataTables
+            return Json(new
+            {
+                draw = parameters.Draw,
+                recordsFiltered = recordsTotal,
+                recordsTotal = recordsTotal,
+                data = resultData
+            });
+        }
+
+        
         public async Task<IActionResult> ExportEmployees()
         {
             var employees = await _context.Employees
@@ -225,6 +322,7 @@ namespace ETS_CRUD_DEMO.Controllers
         }
 
 
+
         // GET: Employees/Details/5
         public async Task<IActionResult> Details(Guid? id)
         {
@@ -247,6 +345,7 @@ namespace ETS_CRUD_DEMO.Controllers
             return View(employee);
         }
 
+
         // GET: Employee/Create
         public IActionResult Create()
         {
@@ -259,6 +358,7 @@ namespace ETS_CRUD_DEMO.Controllers
         // POST: Employee/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
+
         public async Task<IActionResult> Create([Bind("FirstName,LastName,Email,PhoneNumber,Gender,DOB,DepartmentId,RoleId,IsActive,StateId,CityId,JoiningDate")] Employee employee,
             IFormFile profileImage, List<string> SelectedSkills)
         {
@@ -311,6 +411,7 @@ namespace ETS_CRUD_DEMO.Controllers
             return Json(cities);
         }
 
+        [Authorize(Policy = "CanUpdate")]
         // GET: Employees/Edit/5
         public async Task<IActionResult> Edit(Guid? id)
         {
@@ -342,6 +443,8 @@ namespace ETS_CRUD_DEMO.Controllers
         // POST: Employees/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Policy = "CanUpdate")]
+
         public async Task<IActionResult> Edit(Guid id, [Bind("EmployeeId,FirstName,LastName,Email,PhoneNumber,Gender,DOB,DepartmentId,RoleId,IsActive,StateId,CityId,JoiningDate,ProfilePicture")] Employee employee, IFormFile? profileImage, string[] SelectedSkills)
         {
             if (id != employee.EmployeeId)
@@ -442,6 +545,8 @@ namespace ETS_CRUD_DEMO.Controllers
             return View(employee);
         }
 
+
+        [Authorize(Policy = "CanUpdate")]
         // GET: Employees/Delete/5
         public async Task<IActionResult> Delete(Guid? id)
         {
@@ -467,6 +572,9 @@ namespace ETS_CRUD_DEMO.Controllers
         // POST: Employees/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
+        [Authorize(Policy = "CanUpdate")]
+
+
         public async Task<IActionResult> DeleteConfirmed(Guid id)
         {
             var employee = await _context.Employees.FindAsync(id);
