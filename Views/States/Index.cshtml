@@ -16,8 +16,8 @@
             <a href="@Url.Action("Create")" class="text-primary">Add New</a>
         </div>
         <div class="d-flex gap-3 align-items-center">
-           @*  <div class="search-container">
-                <input type="text" id="customSearch" class="form-control" placeholder="Search states..." style="width: 250px;">
+            @*  <div class="search-container">
+            <input type="text" id="customSearch" class="form-control" placeholder="Search states..." style="width: 250px;">
             </div> *@
             <form id="importForm" asp-action="Import" method="post" enctype="multipart/form-data" class="d-inline">
                 <input type="file" id="importFile" name="file" accept=".csv, .xlsx" class="d-none" />
@@ -82,9 +82,9 @@
                         data: 'stateId',
                         render: function (data) {
                             return `
-                                        <a href="/States/Edit/${data}">Edit</a> |
-                                        <a href="/States/Details/${data}">Details</a> |
-                                        <a href="/States/Delete/${data}">Delete</a>`;
+                                                <a href="/States/Edit/${data}">Edit</a> |
+                                                <a href="/States/Details/${data}">Details</a> |
+                                                <a href="/States/Delete/${data}">Delete</a>`;
                         },
                         orderable: false,
                         searchable: false

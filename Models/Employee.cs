@@ -70,6 +70,7 @@ namespace ETS_CRUD_DEMO.Models
         public City? City { get; set; }
 
         [DisplayName("Joining Date")]
+        [DataType(DataType.Date)]
         public DateTime JoiningDate { get; set; }
     }
 

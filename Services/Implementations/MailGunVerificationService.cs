@@ -107,18 +107,15 @@ namespace ETS_CRUD_DEMO.Services.Implementations
             }
         }
 
-        //private string GenerateOTP()
-        //{
-        //    // Generate a random 6-digit number
-        //    Random random = new Random();
-        //    return random.Next(100000, 999999).ToString();
-        //}
+        /* private string GenerateOTP()
+         {
+             // Generate a random 6-digit number
+             Random random = new Random();
+             return random.Next(100000, 999999).ToString();
+         }*/
+
         private string GenerateOTP()
         {
-            // Generate a random 6-digit number
-            Random random = new Random();
-
-            //return random.Next(100000, 999999).ToString();
             int otp = 123456;
             return otp.ToString();
         }

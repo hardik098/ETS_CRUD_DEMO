@@ -408,5 +408,6 @@ namespace ETS_CRUD_DEMO.Controllers
         {
             return _context.Cities.Any(e => e.CityId == id);
         }
+
     }
 }

@@ -17,14 +17,16 @@
         </div>
 
         <div class="d-flex gap-3 align-items-center">
-            <form id="importForm" asp-action="ImportEmployees" method="post" enctype="multipart/form-data" class="d-inline">
+           @*  <div class="search-container">
+                <input type="text" id="customSearch" class="form-control" placeholder="Search employees..." style="width: 250px;">
+            </div> *@
+            <form id="importForm" asp-action="ImportCsv" method="post" enctype="multipart/form-data" class="d-inline">
                 <input type="file" id="importFile" name="file" accept=".csv, .xlsx" class="d-none" />
                 <button type="button" onclick="triggerFileInput()" class="btn btn-secondary">Import</button>
             </form>
-            <a href="@Url.Action("ExportEmployees")" class="btn btn-info">Export</a>
-            @*  <div class="search-container">
-            <input type="text" id="customSearch" class="form-control" placeholder="Search employees..." style="width: 250px;">
-            </div> *@
+            @* <a href="@Url.Action("ExportEmployees")" class="btn btn-info">Export</a> *@
+
+            <a asp-action="ExportCsv" class="btn btn-primary">Export</a>
 
         </div>
     </div>
@@ -75,9 +77,17 @@
                     <td>@Html.DisplayFor(modelItem => item.value.City.CityName)</td>
                     <td>@item.value.JoiningDate.ToString("dd-MM-yyyy")</td>
                     <td class="action-buttons">
-                        <a asp-action="Edit" asp-route-id="@item.value.EmployeeId">Edit</a> |
-                        <a asp-action="Details" asp-route-id="@item.value.EmployeeId">Details</a> |
-                        <a asp-action="Delete" asp-route-id="@item.value.EmployeeId">Delete</a>
+                        @* Role-based rendering *@
+                        @if (User.IsInRole("Admin"))
+                        {
+                            <a asp-action="Edit" asp-route-id="@item.value.EmployeeId">Edit</a> <span> | </span>
+                            <a asp-action="Delete" asp-route-id="@item.value.EmployeeId">Delete</a> <span> | </span>
+                            <a asp-action="Details" asp-route-id="@item.value.EmployeeId"> Details </a>
+                        }
+                        else if (User.IsInRole("Sub-admin"))
+                        {
+                            <a asp-action="Details" asp-route-id="@item.value.EmployeeId">Details</a>
+                        }
                     </td>
                 </tr>
             }
@@ -177,41 +187,59 @@
     <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
     <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-    <script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
-
     <script>
-        let dataTable;
-
         $(document).ready(function () {
-            dataTable = $('#employeesTable').DataTable({
-                responsive: true,
-                serverSide: true,
+            $('#employeesTable').DataTable({
                 processing: true,
-                dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6">>rtip', // Removed default search
-                lengthMenu: [
-                    [7, 10, 25, 50, -1],
-                    ['7 rows', '10 rows', '25 rows', '50 rows', 'Show all']
-                ],
-                pageLength: 7,
-                order: [[0, 'asc']],
-                columnDefs: [
+                serverSide: true,
+                responsive: true,
+                ajax: {
+                    url: '@Url.Action("GetEmployees", "Employees")',
+                    type: 'POST'
+                },
+                columns: [
                     {
-                        targets: -1,
+                        data: null, // Serial number column
+                        render: function (data, type, row, meta) {
+                            var pageInfo = $('#employeesTable').DataTable().page.info();
+                            return pageInfo.start + meta.row + 1; // Adjust row number based on the current page
+                        },
+                        orderable: false, // Disable ordering on this column
+                        searchable: false  // Disable searching on this column
+                    },
+                    { data: 'firstName' },
+                    { data: 'lastName' },
+                    { data: 'dob' },
+                    { data: 'department' },
+                    { data: 'role' },
+                    { data: 'isActive' },
+                    { data: 'state' },
+                    { data: 'city' },
+                    { data: 'joiningDate' },
+                    {
+                        data: 'employeeId', // Keep employeeId for action links
+                        render: function (data, type, row) {
+                            return `
+                                                                        <a href="/Employees/Edit/${data}">Edit</a> |
+                                                                        <a href="/Employees/Details/${data}">Details</a> |
+                                                                        <a href="/Employees/Delete/${data}">Delete</a>`;
+                        },
                         orderable: false,
                         searchable: false
                     }
                 ],
-                language: {
-                    lengthMenu: "_MENU_",
-                }
-            });
+                order: [[1, 'asc']], // Default ordering on firstName or another column, not serial numbers
+                pageLength: 7,
+                lengthMenu: [
+                    [7, 10, 25, 50, -1],
+                    ['7', '10', '25', '50', 'All']
+                ],
 
-            // Custom search functionality
-            $('#customSearch').on('keyup', function () {
-                dataTable.search(this.value).draw();
             });
         });
-
+        $('#customSearchBox').on('keyup', function () {
+            $('#employeesTable').DataTable().search(this.value).draw();
+        });
         function triggerFileInput() {
             const input = document.getElementById('importFile');
             input.click();

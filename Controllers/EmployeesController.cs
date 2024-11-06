@@ -15,10 +15,11 @@ using CsvHelper;
 using CsvReader = CsvHelper.CsvReader;
 using CsvWriter = CsvHelper.CsvWriter;
 using ETS_CRUD_DEMO.Enums;
-using NPOI.SS.UserModel;
-using NPOI.XSSF.UserModel;
 using Microsoft.AspNetCore.Authorization;
-using System.Text.RegularExpressions; // For handling CSV files
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using NPOI.XSSF.UserModel;
+using System.Text.RegularExpressions;
+using System.ComponentModel.DataAnnotations; // For handling CSV files
 
 namespace ETS_CRUD_DEMO.Controllers
 {
@@ -31,7 +32,6 @@ namespace ETS_CRUD_DEMO.Controllers
         public EmployeesController(ApplicationDbContext context, IWebHostEnvironment webHostEnvironment)
         {
             _context = context;
-            _webHostEnvironment = webHostEnvironment;
         }
 
         [HttpGet]
@@ -133,7 +133,6 @@ namespace ETS_CRUD_DEMO.Controllers
             });
         }
 
-        
         public async Task<IActionResult> ExportEmployees()
         {
             var employees = await _context.Employees
@@ -212,7 +211,7 @@ namespace ETS_CRUD_DEMO.Controllers
         }
 
         // Action to import employees
-        [HttpPost]
+        /*[HttpPost]
         public async Task<IActionResult> ImportEmployees(IFormFile file)
         {
             if (file == null || !(file.ContentType == "text/csv" || file.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
@@ -370,6 +369,7 @@ namespace ETS_CRUD_DEMO.Controllers
         {
             return bool.TryParse(input, out var value) ? value : throw new Exception("Invalid boolean value.");
         }
+*/
 
         //[HttpPost]
         //public async Task<IActionResult> ImportEmployees(IFormFile file)
@@ -519,9 +519,12 @@ namespace ETS_CRUD_DEMO.Controllers
 
         // POST: Employee/Create
         [HttpPost]
+
         [ValidateAntiForgeryToken]
 
-        public async Task<IActionResult> Create([Bind("FirstName,LastName,Email,PhoneNumber,Gender,DOB,DepartmentId,RoleId,IsActive,StateId,CityId,JoiningDate")] Employee employee,
+        public async Task<IActionResult> Create(
+           [Bind("FirstName,LastName,Email,PhoneNumber,Gender,DOB,DepartmentId,RoleId,IsActive,StateId,CityId,JoiningDate")]
+           Employee employee,
             IFormFile profileImage, List<string> SelectedSkills)
         {
             //if (ModelState.IsValid)
@@ -735,7 +738,7 @@ namespace ETS_CRUD_DEMO.Controllers
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         [Authorize(Policy = "CanUpdate")]
-            
+
 
         public async Task<IActionResult> DeleteConfirmed(Guid id)
         {
@@ -802,7 +805,354 @@ namespace ETS_CRUD_DEMO.Controllers
         {
             var city = await _context.Cities
                 .FirstOrDefaultAsync(c => c.CityName == cityName);
+
+
+            if (city == null)
+            {
+                // Handle the case when city is not found
+                Console.WriteLine($"City '{cityName}' not found in database.");
+
+                throw new KeyNotFoundException($"City '{cityName}' not found in database.");
+            }
             return city.CityId;
         }
+
+        public IActionResult ImportCsv(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = false, message = "Please upload a valid CSV file." });
+                }
+                ModelState.AddModelError("File", "Please upload a valid CSV file.");
+                return View("ImportErrors");
+            }
+
+            var errors = new List<string>();
+            var employees = new List<Employee>();
+
+            using (var reader = new StreamReader(file.OpenReadStream()))
+            {
+                var lineNumber = 1; // Initialize line number to track row
+                while (!reader.EndOfStream)
+                {
+                    var line = reader.ReadLine();
+                    if (lineNumber == 1) // Skip header row
+                    {
+                        lineNumber++;
+                        continue;
+                    }
+
+                    var values = line.Split(','); // Assuming comma as the delimiter
+                    var leng = values.Length;
+                    if (values.Length != 13) // Adjust according to the expected number of columns
+                    {
+                        errors.Add($"Row {lineNumber}: Invalid number of columns.");
+                        lineNumber++;
+                        continue;
+                    }
+
+                    var employee = new Employee();
+                    bool rowIsValid = true;
+
+                    try
+                    {
+                        employee.EmployeeId = Guid.NewGuid();
+
+                        // First Name
+                        employee.FirstName = values[0];
+                        if (string.IsNullOrWhiteSpace(employee.FirstName))
+                        {
+                            errors.Add($"Row {lineNumber}, Column 1: First Name is required.");
+                            rowIsValid = false;
+                        }
+
+                        // Last Name
+                        employee.LastName = values[1];
+                        if (string.IsNullOrWhiteSpace(employee.LastName))
+                        {
+                            errors.Add($"Row {lineNumber}, Column 2: Last Name is required.");
+                            rowIsValid = false;
+                        }
+                        // Email
+                        employee.Email = values[2];
+                        if (!new EmailAddressAttribute().IsValid(employee.Email))
+                        {
+                            errors.Add($"Row {lineNumber}, Column 3: Invalid Email format.");
+                            rowIsValid = false;
+                        }
+                        else
+                        {
+                            // Check if email already exists in the database
+                            var existingEmployee = _context.Employees.FirstOrDefault(e => e.Email == employee.Email);
+                            if (existingEmployee != null)
+                            {
+                                errors.Add($"Row {lineNumber}, Column 3: Email '{employee.Email}' already exists in the database.");
+                                rowIsValid = false;
+                            }
+                        }
+
+                        // Phone Number
+                        employee.PhoneNumber = values[3];
+                        if (!Regex.IsMatch(employee.PhoneNumber ?? "", @"^\d{10}$"))
+                        {
+                            errors.Add($"Row {lineNumber}, Column 4: Invalid phone number format. Must be 10 digits.");
+                            rowIsValid = false;
+                        }
+
+                        // Gender (case insensitive match)
+                        var genderStr = values[4]?.ToLower();
+                        if (genderStr != "male" && genderStr != "female" && genderStr != "other")
+                        {
+                            errors.Add($"Row {lineNumber}, Column 5: Gender must be 'Male', 'Female', or 'Other'.");
+                            rowIsValid = false;
+                        }
+                        else
+                        {
+                            employee.Gender = Enum.Parse<GenderOptions>(genderStr, true);
+                        }
+
+                        // DOB
+                        if (DateTime.TryParse(values[5], out DateTime dob))
+                        {
+                            employee.DOB = dob;
+                        }
+                        else
+                        {
+                            errors.Add($"Row {lineNumber}, Column 6: Invalid DOB format.");
+                            rowIsValid = false;
+                        }
+
+                        // Skills
+                        employee.Skills = values[6]?.Split(',').ToList() ?? new List<string>();
+
+                        // DepartmentId
+                        string departmentName = values[7];
+                        var department = _context.Departments.FirstOrDefault(d => d.DepartmentName.ToLower() == departmentName.ToLower());
+
+                        if (department != null)
+                        {
+                            employee.DepartmentId = department.DepartmentId; // Assign the found department ID
+                        }
+                        else
+                        {
+                            errors.Add($"Row {lineNumber}, Column 8: Department '{departmentName}' does not exist.");
+                            rowIsValid = false;
+                        }
+
+
+                        // RoleId
+
+                        var roleName = values[8]?.Trim();
+                        var role = _context.Roles.FirstOrDefault(r => r.RoleName.ToLower() == roleName.ToLower());
+                        if (role != null)
+                        {
+                            employee.RoleId = role.RoleId;
+                        }
+                        else
+                        {
+                            errors.Add($"Row {lineNumber}, Column 9: Role '{roleName}' not found.");
+                            rowIsValid = false;
+                        }
+
+                        // IsActive
+                        employee.IsActive = values[9]?.ToLower() == "True";
+
+                        // Profile Picture
+                        //employee.ProfilePicture = values[11];
+
+                        // StateId (nullable)
+                        var stateName = values[10]?.Trim();
+                        var state = _context.States.FirstOrDefault(s => s.StateName.ToLower() == stateName.ToLower());
+                        if (state != null)
+                        {
+                            employee.StateId = state.StateId;
+                        }
+                        else
+                        {
+                            errors.Add($"Row {lineNumber}, Column 11: State '{stateName}' not found.");
+                            rowIsValid = false;
+                        }
+
+                        // CityId (nullable)
+                        var cityName = values[11]?.Trim();
+                        var city = _context.Cities.FirstOrDefault(c => c.CityName.ToLower() == cityName.ToLower());
+                        if (city != null)
+                        {
+                            employee.CityId = city.CityId;
+                        }
+                        else
+                        {
+                            errors.Add($"Row {lineNumber}, Column 12: City '{cityName}' not found.");
+                            rowIsValid = false;
+                        }
+                        // Joining Date
+                        if (DateTime.TryParse(values[12], out DateTime joiningDate))
+                        {
+                            employee.JoiningDate = joiningDate;
+                        }
+                        else
+                        {
+                            errors.Add($"Row {lineNumber}, Column 13: Invalid Joining Date format.");
+                            rowIsValid = false;
+                        }
+
+                        // Only add employee if row is valid
+                        if (rowIsValid)
+                        {
+                            employees.Add(employee);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"Row {lineNumber}: Unexpected error - {ex.Message}");
+                    }
+
+                    lineNumber++;
+                }
+            }
+
+            // If there are errors, display them to the user
+            if (errors.Count > 0)
+            {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    // For AJAX requests, return the error view content
+                    TempData["ImportErrors"] = errors.ToList();
+                    return View("ImportErrors");
+                }
+                TempData["ImportErrors"] = errors;
+                return View("ImportErrors");
+            }
+            // If no errors, save all valid employees to the database
+            try
+            {
+                _context.Employees.AddRange(employees);
+                _context.SaveChanges();
+
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = true, message = $"Successfully imported {employees.Count} employees." });
+                }
+                TempData["SuccessMessage"] = $"Successfully imported {employees.Count} employees.";
+                return RedirectToAction("Index");
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"Database error: {ex.Message}");
+                TempData["ImportErrors"] = errors;
+
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return View("ImportErrors");
+                }
+                return View("ImportErrors");
+            }
+        }
+
+        public IActionResult ExportCsv()
+        {
+            var employees = _context.Employees.ToList();
+
+            using (var workbook = new XSSFWorkbook())
+            {
+                var sheet = workbook.CreateSheet("Employees");
+
+                // Create header row
+                var headerRow = sheet.CreateRow(0);
+                headerRow.CreateCell(0).SetCellValue("EmployeeId");
+                headerRow.CreateCell(1).SetCellValue("First Name");
+                headerRow.CreateCell(2).SetCellValue("Last Name");
+                headerRow.CreateCell(3).SetCellValue("Email");
+                headerRow.CreateCell(4).SetCellValue("Phone Number");
+                headerRow.CreateCell(5).SetCellValue("Gender");
+                headerRow.CreateCell(6).SetCellValue("DOB");
+                headerRow.CreateCell(7).SetCellValue("Skills");
+                headerRow.CreateCell(8).SetCellValue("DepartmentId");
+                headerRow.CreateCell(9).SetCellValue("RoleId");
+                headerRow.CreateCell(10).SetCellValue("IsActive");
+                headerRow.CreateCell(11).SetCellValue("Profile Picture");
+                headerRow.CreateCell(12).SetCellValue("StateId");
+                headerRow.CreateCell(13).SetCellValue("CityId");
+                headerRow.CreateCell(14).SetCellValue("Joining Date");
+
+                // Populate rows with employee data
+                for (int i = 0; i < employees.Count; i++)
+                {
+                    var row = sheet.CreateRow(i + 1);
+                    var emp = employees[i];
+                    row.CreateCell(0).SetCellValue(emp.EmployeeId.ToString());
+                    row.CreateCell(1).SetCellValue(emp.FirstName);
+                    row.CreateCell(2).SetCellValue(emp.LastName);
+                    row.CreateCell(3).SetCellValue(emp.Email);
+                    row.CreateCell(4).SetCellValue(emp.PhoneNumber);
+                    row.CreateCell(5).SetCellValue(emp.Gender.ToString());
+                    row.CreateCell(6).SetCellValue(emp.DOB.ToString("yyyy-MM-dd"));
+                    row.CreateCell(7).SetCellValue(string.Join(",", emp.Skills));
+                    row.CreateCell(8).SetCellValue(emp.DepartmentId.ToString());
+                    row.CreateCell(9).SetCellValue(emp.RoleId.ToString());
+                    row.CreateCell(10).SetCellValue(emp.IsActive ? "Yes" : "No");
+                    row.CreateCell(11).SetCellValue(emp.ProfilePicture);
+                    row.CreateCell(12).SetCellValue(emp.StateId?.ToString());
+                    row.CreateCell(13).SetCellValue(emp.CityId?.ToString());
+                    row.CreateCell(14).SetCellValue(emp.JoiningDate.ToString("yyyy-MM-dd"));
+                }
+
+                using (var stream = new MemoryStream())
+                {
+                    workbook.Write(stream);
+                    var content = stream.ToArray();
+                    return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Employees.xlsx");
+                }
+            }
+        }
+        private DateTime ParseDate(string dateStr, int row, string columnName, List<string> errors)
+        {
+            if (DateTime.TryParseExact(dateStr, new[] { "yyyy-MM-dd", "MM/dd/yyyy", "dd-MM-yyyy" },
+                                       CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+            {
+                return date;
+            }
+            errors.Add($"Row {row + 1}, Column {columnName}: Invalid date format.");
+            return DateTime.MinValue; // Default value for invalid dates
+        }
+
+        private GenderOptions ParseGender(string genderStr, int row, List<string> errors)
+        {
+            if (Enum.TryParse(typeof(GenderOptions), genderStr, true, out var gender))
+            {
+                return (GenderOptions)gender;
+            }
+            errors.Add($"Row {row + 1}, Column Gender: Invalid gender value (allowed: Male, Female, Other).");
+            return GenderOptions.Other; // Default value for invalid enums
+        }
+
+        private Guid ParseGuid(string guidStr, int row, string columnName, List<string> errors)
+        {
+            if (Guid.TryParse(guidStr, out var guid))
+            {
+                return guid;
+            }
+            errors.Add($"Row {row + 1}, Column {columnName}: Invalid GUID format.");
+            return Guid.Empty;
+        }
+
+        private Guid? ParseNullableGuid(string guidStr, int row, string columnName, List<string> errors)
+        {
+            if (string.IsNullOrWhiteSpace(guidStr)) return null;
+            return Guid.TryParse(guidStr, out var guid) ? guid : (Guid?)null;
+        }
+
+        private bool ParseBoolean(string boolStr, int row, string columnName, List<string> errors)
+        {
+            if (bool.TryParse(boolStr, out var boolValue))
+            {
+                return boolValue;
+            }
+            errors.Add($"Row {row + 1}, Column {columnName}: Invalid boolean value (allowed: true, false).");
+            return false;
+        }
+
     }
 }

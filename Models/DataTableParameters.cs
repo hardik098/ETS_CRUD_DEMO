@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace ETS_CRUD_DEMO.Models // Use the namespace that matches your project structure
+﻿namespace ETS_CRUD_DEMO.Models
 {
     public class DataTableParameters
     {
