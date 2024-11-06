@@ -20,7 +20,7 @@
            @*  <div class="search-container">
                 <input type="text" id="customSearch" class="form-control" placeholder="Search employees..." style="width: 250px;">
             </div> *@
-            <form id="importForm" asp-action="ImportCsv" method="post" enctype="multipart/form-data" class="d-inline">
+            <form id="importForm"  enctype="multipart/form-data" class="d-inline">
                 <input type="file" id="importFile" name="file" accept=".csv, .xlsx" class="d-none" />
                 <button type="button" onclick="triggerFileInput()" class="btn btn-secondary">Import</button>
             </form>
@@ -250,17 +250,33 @@
                     formData.append('file', file);
 
                     $.ajax({
-                        url: '@Url.Action("ImportEmployees")',
+                        url: '@Url.Action("ImportCsv")',
                         type: 'POST',
                         data: formData,
                         processData: false,
                         contentType: false,
                         success: function (response) {
-                            alert('Data imported successfully');
-                            location.reload();
+                            // Check if response is HTML (error page)
+                            if (typeof response === 'string' && (response.includes('<!DOCTYPE html>') || response.includes('<html'))) {
+                                document.documentElement.innerHTML = response;
+                            }
+                            // Check if response is JSON object with success property
+                            else if (response && response.success === true) {
+                                alert(response.message || 'Data imported successfully');
+                                location.reload();
+                            }
+                            // Handle other success cases
+                            else {
+                                alert('Import completed but with unknown response');
+                                location.reload();
+                            }
                         },
                         error: function (xhr, status, error) {
-                            alert('Error importing file: ' + xhr.responseText);
+                            if (xhr.responseText.includes('<!DOCTYPE html>') || xhr.responseText.includes('<html')) {
+                                document.documentElement.innerHTML = xhr.responseText;
+                            } else {
+                                alert('Error importing file: ' + error);
+                            }
                         }
                     });
                 }
