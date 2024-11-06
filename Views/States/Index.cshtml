@@ -1,0 +1,106 @@
+﻿@model IEnumerable<ETS_CRUD_DEMO.Models.State>
+
+@{
+    ViewData["Title"] = "States";
+}
+
+<!-- DataTables CSS -->
+<link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+<link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet">
+
+<div class="container-fluid">
+    <h1 class="mb-2">States</h1>
+
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+            <a href="@Url.Action("Create")" class="text-primary">Add New</a>
+        </div>
+        <div class="d-flex gap-3 align-items-center">
+            @*  <div class="search-container">
+            <input type="text" id="customSearch" class="form-control" placeholder="Search states..." style="width: 250px;">
+            </div> *@
+            <form id="importForm" asp-action="Import" method="post" enctype="multipart/form-data" class="d-inline">
+                <input type="file" id="importFile" name="file" accept=".csv, .xlsx" class="d-none" />
+                <button type="button" onclick="triggerFileInput()" class="btn btn-secondary">Import</button>
+            </form>
+            <a href="@Url.Action("ExportToExcel")" class="btn btn-info">Export</a>
+        </div>
+    </div>
+
+    <table id="statesTable" class="table" width="100%">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>@Html.DisplayNameFor(model => model.StateName)</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model.Select((value, index) => new { value, index }))
+            {
+                <tr>
+                    <td>@(item.index + 1)</td>
+                    <td>@Html.DisplayFor(modelItem => item.value.StateName)</td>
+                    <td>
+                        <a asp-action="Edit" asp-route-id="@item.value.StateId">Edit</a> |
+                        <a asp-action="Details" asp-route-id="@item.value.StateId">Details</a> |
+                        <a asp-action="Delete" asp-route-id="@item.value.StateId">Delete</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@section Scripts {
+    <!-- DataTables JavaScript -->
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            $('#statesTable').DataTable({
+                processing: true,
+                serverSide: true,
+                responsive: true,
+                ajax: {
+                    url: '@Url.Action("GetStates", "States")', // Adjust URL to your States controller
+                    type: 'POST'
+                },
+                columns: [
+                    {
+                        data: null,
+                        render: function (data, type, row, meta) {
+                            var pageInfo = $('#statesTable').DataTable().page.info();
+                            return pageInfo.start + meta.row + 1; // Adjust row number based on the current page
+                        },
+                        orderable: false,
+                        searchable: false
+                    },
+                    { data: 'stateName' },
+                    {
+                        data: 'stateId',
+                        render: function (data) {
+                            return `
+                                                <a href="/States/Edit/${data}">Edit</a> |
+                                                <a href="/States/Details/${data}">Details</a> |
+                                                <a href="/States/Delete/${data}">Delete</a>`;
+                        },
+                        orderable: false,
+                        searchable: false
+                    }
+                ],
+                order: [[1, 'asc']],
+                pageLength: 7,
+                lengthMenu: [
+                    [7, 10, 25, 50, -1],
+                    ['7', '10', '25', '50', 'All']
+                ],
+            });
+        });
+
+        $('#customSearchBox').on('keyup', function () {
+            $('#statesTable').DataTable().search(this.value).draw();
+        });
+    </script>
+}

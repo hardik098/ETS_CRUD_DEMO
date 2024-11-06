@@ -1,0 +1,44 @@
+﻿@model IEnumerable<ETS_CRUD_DEMO.Models.Role>
+
+@{
+    ViewData["Title"] = "Index";
+}
+
+<h1>Roles</h1>
+
+<p>
+    <a asp-action="Create">Add New</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>
+                @Html.DisplayNameFor(model => model.RoleName)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Permissions)
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model.Select((value, index) => new { value, index }))
+        {
+            <tr>
+                <td>@(item.index + 1)</td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.value.RoleName)
+                </td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.value.Permissions)
+                </td>
+                <td>
+                    <a asp-action="Edit" asp-route-id="@item.value.RoleId">Edit</a> |
+                    <a asp-action="Details" asp-route-id="@item.value.RoleId">Details</a> |
+                    <a asp-action="Delete" asp-route-id="@item.value.RoleId">Delete</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

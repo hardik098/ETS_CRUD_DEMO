@@ -1,0 +1,157 @@
+﻿@model Employee
+@{
+    ViewData["Title"] = "Delete Employee";
+}
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card shadow-sm">
+                <div class="card-header bg-danger text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h3 class="mb-0">Confirm Delete Employee</h3>
+                        <span class="badge bg-light text-danger">ID: @Model.EmployeeId</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Are you sure you want to delete this employee? This action cannot be undone.
+                    </div>
+
+                    <div class="row">
+                        <!-- Employee Profile Section -->
+                        <div class="col-md-4 text-center mb-4">
+                            @if (!string.IsNullOrEmpty(Model.ProfilePicture))
+                            {
+                                <img src="@Model.ProfilePicture" alt="Employee Photo" class="img-thumbnail rounded-circle mb-3" style="width: 200px; height: 200px; object-fit: cover;" />
+                            }
+                            else
+                            {
+                                <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 200px; height: 200px;">
+                                    <i class="fas fa-user fa-4x text-secondary"></i>
+                                </div>
+                            }
+                            <h4 class="mb-1">@Model.FirstName @Model.LastName</h4>
+                            Role : <span class="text-muted mb-2">@Model.Role?.RoleName</span><br />
+                            Department : <span class="text-muted mb-2">@Model.Department?.DepartmentName</span><br />
+                        </div>
+
+                        <!-- Employee Details Section -->
+                        <div class="col-md-8">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header bg-light">
+                                            <h5 class="mb-0">Personal Information</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <dl class="row mb-0">
+                                                <dt class="col-sm-4">Email</dt>
+                                                <dd class="col-sm-8">@Model.Email</dd>
+
+                                                <dt class="col-sm-4">Phone</dt>
+                                                <dd class="col-sm-8">@Model.PhoneNumber</dd>
+
+                                                <dt class="col-sm-4">Gender</dt>
+                                                <dd class="col-sm-8">@Model.Gender</dd>
+
+                                                <dt class="col-sm-4">D.O.B.</dt>
+                                                <dd class="col-sm-8">@Model.DOB.ToString("MMM dd, yyyy")</dd>
+                                            </dl>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header bg-light">
+                                            <h5 class="mb-0">Employment Details</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <dl class="row mb-0">
+                                                <dt class="col-sm-4">Status</dt>
+                                                <dd class="col-sm-8">
+                                                    @if (Model.IsActive)
+                                                    {
+                                                        <span class="badge bg-success">Active</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-danger">Inactive</span>
+                                                    }
+                                                </dd>
+
+                                                <dt class="col-sm-4">Joined On</dt>
+                                                <dd class="col-sm-8">@Model.JoiningDate.ToString("MMM dd, yyyy")</dd>
+
+                                                <dt class="col-sm-4">Location</dt>
+                                                <dd class="col-sm-8">
+                                                    @(Model.City?.CityName), @(Model.State?.StateName)
+                                                </dd>
+                                            </dl>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Skills Section -->
+                            @if (Model.Skills != null && Model.Skills.Any())
+                            {
+                                <div class="card mb-3">
+                                    <div class="card-header bg-light">
+                                        <h5 class="mb-0">Skills</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        @foreach (var skill in Model.Skills)
+                                        {
+                                            <span class="badge bg-info me-2 mb-2">@skill</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Delete Confirmation Form -->
+                    <form asp-action="Delete" class="mt-4">
+                        <input type="hidden" asp-for="EmployeeId" />
+                        <div class="d-flex justify-content-end gap-2">
+                            <a asp-action="Index" class="btn btn-secondary">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash-alt me-2"></i>Delete Employee
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Optional: Add confirmation dialog
+        $(document).ready(function () {
+            $('form').on('submit', function (e) {
+                e.preventDefault();
+                Swal.fire({
+                    title: 'Are you absolutely sure?',
+                    text: "This will permanently delete the employee record!",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Yes, delete it!',
+                    cancelButtonText: 'No, cancel'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        this.submit();
+                    }
+                });
+            });
+        });
+    </script>
+}
