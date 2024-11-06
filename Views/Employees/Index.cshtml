@@ -123,17 +123,21 @@
                         data: 'employeeId', // Keep employeeId for action links
                         render: function (data, type, row) {
                             return `
-                                                <a href="/Employees/Edit/${data}">Edit</a> |
-                                                <a href="/Employees/Details/${data}">Details</a> |
-                                                <a href="/Employees/Delete/${data}">Delete</a>`;
+                                                        <a href="/Employees/Edit/${data}">Edit</a> |
+                                                        <a href="/Employees/Details/${data}">Details</a> |
+                                                        <a href="/Employees/Delete/${data}">Delete</a>`;
                         },
                         orderable: false,
                         searchable: false
                     }
                 ],
                 order: [[1, 'asc']], // Default ordering on firstName or another column, not serial numbers
-                pageLength: 10,
-                lengthMenu: [7, 25, 50, 100]
+                pageLength: 7,
+                lengthMenu: [
+                    [7, 10, 25, 50, -1],
+                    ['7', '10', '25', '50', 'All']
+                ],
+
             });
         });
         $('#customSearchBox').on('keyup', function () {
