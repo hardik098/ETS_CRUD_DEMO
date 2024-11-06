@@ -1,10 +1,7 @@
 using ETS_CRUD_DEMO.Data;
 using ETS_CRUD_DEMO.Models;
-using ETS_CRUD_DEMO.Repository.Interfaces;
-using ETS_CRUD_DEMO.Repository.Repositories;
 using ETS_CRUD_DEMO.Services.Implementations;
 using ETS_CRUD_DEMO.Services.Interfaces;
-using MediatR;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using OfficeOpenXml;

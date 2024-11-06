@@ -40,6 +40,97 @@ namespace ETS_CRUD_DEMO.Controllers
             var applicationDbContext = _context.Employees.Include(e => e.City).Include(e => e.Department).Include(e => e.Role).Include(e => e.State);
             return View(await applicationDbContext.ToListAsync());
         }
+        [HttpPost]
+        public async Task<IActionResult> GetEmployees([FromForm] DataTableParameters parameters)
+        {
+            // Base query including related data
+            var query = _context.Employees
+                .Include(e => e.Department)
+                .Include(e => e.Role)
+                .Include(e => e.State)
+                .Include(e => e.City)
+                .Select(emp => new
+                {
+                    emp.EmployeeId,
+                    emp.FirstName,
+                    emp.LastName,
+                    DOB = emp.DOB,  // Keep as DateTime for sorting
+                    Department = emp.Department != null ? emp.Department.DepartmentName : "N/A",
+                    Role = emp.Role != null ? emp.Role.RoleName : "N/A",
+                    IsActive = emp.IsActive ? "Yes" : "No",
+                    State = emp.State != null ? emp.State.StateName : "N/A",
+                    City = emp.City != null ? emp.City.CityName : "N/A",
+                    JoiningDate = emp.JoiningDate // Keep as DateTime for sorting
+                });
+
+            // Apply search filter if search value is present
+            if (!string.IsNullOrWhiteSpace(parameters.Search?.Value))
+            {
+                string searchValue = parameters.Search.Value.ToLower();
+                query = query.Where(emp =>
+                    emp.FirstName.ToLower().Contains(searchValue) ||
+                    emp.LastName.ToLower().Contains(searchValue) ||
+                    (emp.Department ?? "").ToLower().Contains(searchValue) ||
+                    (emp.Role ?? "").ToLower().Contains(searchValue) ||
+                    (emp.State ?? "").ToLower().Contains(searchValue) ||
+                    (emp.City ?? "").ToLower().Contains(searchValue)
+                );
+            }
+
+            // Sorting
+            if (parameters.Order.Any())
+            {
+                var order = parameters.Order.First();
+                bool ascending = order.Dir == "asc";
+
+                query = order.Column switch
+                {
+                    1 => ascending ? query.OrderBy(e => e.FirstName) : query.OrderByDescending(e => e.FirstName),
+                    2 => ascending ? query.OrderBy(e => e.LastName) : query.OrderByDescending(e => e.LastName),
+                    3 => ascending ? query.OrderBy(e => e.DOB) : query.OrderByDescending(e => e.DOB),
+                    4 => ascending ? query.OrderBy(e => e.Department) : query.OrderByDescending(e => e.Department),
+                    5 => ascending ? query.OrderBy(e => e.Role) : query.OrderByDescending(e => e.Role),
+                    6 => ascending ? query.OrderBy(e => e.IsActive) : query.OrderByDescending(e => e.IsActive),
+                    7 => ascending ? query.OrderBy(e => e.State) : query.OrderByDescending(e => e.State),
+                    8 => ascending ? query.OrderBy(e => e.City) : query.OrderByDescending(e => e.City),
+                    9 => ascending ? query.OrderBy(e => e.JoiningDate) : query.OrderByDescending(e => e.JoiningDate),
+                    _ => query // Ignore sorting on EmployeeId if no valid column specified
+                };
+            }
+
+            // Total record count before pagination
+            int recordsTotal = await _context.Employees.CountAsync();
+
+            // Apply pagination
+            var data = await query
+                .Skip(parameters.Start)
+                .Take(parameters.Length)
+                .ToListAsync();
+
+            // Convert date fields to strings in the final data set
+            var resultData = data.Select(emp => new
+            {
+                emp.EmployeeId,
+                emp.FirstName,
+                emp.LastName,
+                DOB = emp.DOB.ToString("dd-MM-yyyy"),  // Format date as string
+                Department = emp.Department,
+                Role = emp.Role,
+                IsActive = emp.IsActive,
+                State = emp.State,
+                City = emp.City,
+                JoiningDate = emp.JoiningDate.ToString("dd-MM-yyyy")  // Format date as string
+            });
+
+            // Return data in JSON format expected by DataTables
+            return Json(new
+            {
+                draw = parameters.Draw,
+                recordsFiltered = recordsTotal,
+                recordsTotal = recordsTotal,
+                data = resultData
+            });
+        }
 
         public async Task<IActionResult> ExportEmployees()
         {
@@ -119,7 +210,7 @@ namespace ETS_CRUD_DEMO.Controllers
         }
 
         // Action to import employees
-        [HttpPost]
+        /*[HttpPost]
         public async Task<IActionResult> ImportEmployees(IFormFile file)
         {
             if (file != null && (file.ContentType == "text/csv" || file.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
@@ -230,7 +321,7 @@ namespace ETS_CRUD_DEMO.Controllers
             }
             return BadRequest("Invalid file format.");
         }
-
+*/
 
 
         // GET: Employees/Details/5
@@ -623,13 +714,22 @@ namespace ETS_CRUD_DEMO.Controllers
                             errors.Add($"Row {lineNumber}, Column 2: Last Name is required.");
                             rowIsValid = false;
                         }
-
                         // Email
                         employee.Email = values[2];
                         if (!new EmailAddressAttribute().IsValid(employee.Email))
                         {
                             errors.Add($"Row {lineNumber}, Column 3: Invalid Email format.");
                             rowIsValid = false;
+                        }
+                        else
+                        {
+                            // Check if email already exists in the database
+                            var existingEmployee = _context.Employees.FirstOrDefault(e => e.Email == employee.Email);
+                            if (existingEmployee != null)
+                            {
+                                errors.Add($"Row {lineNumber}, Column 3: Email '{employee.Email}' already exists in the database.");
+                                rowIsValid = false;
+                            }
                         }
 
                         // Phone Number

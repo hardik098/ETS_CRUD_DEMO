@@ -31,6 +31,65 @@ namespace ETS_CRUD_DEMO.Controllers
             return View(await _context.States.ToListAsync());
         }
 
+        [HttpPost]
+        public async Task<IActionResult> GetStates([FromForm] DataTableParameters parameters)
+        {
+            // Base query including related data
+            var query = _context.States
+                .Select(state => new
+                {
+                    state.StateId,
+                    state.StateName
+                });
+
+            // Apply search filter if search value is present
+            if (!string.IsNullOrWhiteSpace(parameters.Search?.Value))
+            {
+                string searchValue = parameters.Search.Value.ToLower();
+                query = query.Where(state =>
+                    state.StateName.ToLower().Contains(searchValue)
+                );
+            }
+
+            // Sorting
+            if (parameters.Order.Any())
+            {
+                var order = parameters.Order.First();
+                bool ascending = order.Dir == "asc";
+
+                query = order.Column switch
+                {
+                    1 => ascending ? query.OrderBy(s => s.StateName) : query.OrderByDescending(s => s.StateName),
+                    _ => query // Ignore sorting on StateId if no valid column specified
+                };
+            }
+
+            // Total record count before pagination
+            int recordsTotal = await _context.States.CountAsync();
+
+            // Apply pagination
+            var data = await query
+                .Skip(parameters.Start)
+                .Take(parameters.Length)
+                .ToListAsync();
+
+            // Prepare result data
+            var resultData = data.Select(state => new
+            {
+                state.StateId,
+                state.StateName
+            });
+
+            // Return data in JSON format expected by DataTables
+            return Json(new
+            {
+                draw = parameters.Draw,
+                recordsFiltered = recordsTotal,
+                recordsTotal = recordsTotal,
+                data = resultData
+            });
+        }
+
         // Import states from CSV or Excel file
         [HttpPost]
         public async Task<IActionResult> Import(IFormFile file)
@@ -97,8 +156,6 @@ namespace ETS_CRUD_DEMO.Controllers
 
             return RedirectToAction(nameof(Index));
         }
-
-
 
         // Export states to CSV file
         public async Task<IActionResult> ExportToCsv()
