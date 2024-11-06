@@ -15,31 +15,22 @@ using CsvReader = CsvHelper.CsvReader;
 using CsvWriter = CsvHelper.CsvWriter;
 using ETS_CRUD_DEMO.Enums;
 using Microsoft.AspNetCore.Authorization;
-using System.ComponentModel;
-using NPOI.HSSF.UserModel;
-using NPOI.SS.UserModel;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using NPOI.XSSF.UserModel;
-using System.Text;
+using System.Text.RegularExpressions;
+using System.ComponentModel.DataAnnotations; // For handling CSV files
 
 namespace ETS_CRUD_DEMO.Controllers
 {
     [Authorize]
 
-    public class ImportValidationResult
-    {
-        public bool IsValid { get; set; }
-        public List<string> Errors { get; set; } = new List<string>();
-        public Employee Employee { get; set; }
-    }
-
-    public partial class EmployeesController : Controller
+    public class EmployeesController : Controller
     {
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _webHostEnvironment;
         public EmployeesController(ApplicationDbContext context, IWebHostEnvironment webHostEnvironment)
         {
             _context = context;
-            _webHostEnvironment = webHostEnvironment;
         }
 
         [HttpGet]
@@ -49,8 +40,99 @@ namespace ETS_CRUD_DEMO.Controllers
             var applicationDbContext = _context.Employees.Include(e => e.City).Include(e => e.Department).Include(e => e.Role).Include(e => e.State);
             return View(await applicationDbContext.ToListAsync());
         }
+        [HttpPost]
+        public async Task<IActionResult> GetEmployees([FromForm] DataTableParameters parameters)
+        {
+            // Base query including related data
+            var query = _context.Employees
+                .Include(e => e.Department)
+                .Include(e => e.Role)
+                .Include(e => e.State)
+                .Include(e => e.City)
+                .Select(emp => new
+                {
+                    emp.EmployeeId,
+                    emp.FirstName,
+                    emp.LastName,
+                    DOB = emp.DOB,  // Keep as DateTime for sorting
+                    Department = emp.Department != null ? emp.Department.DepartmentName : "N/A",
+                    Role = emp.Role != null ? emp.Role.RoleName : "N/A",
+                    IsActive = emp.IsActive ? "Yes" : "No",
+                    State = emp.State != null ? emp.State.StateName : "N/A",
+                    City = emp.City != null ? emp.City.CityName : "N/A",
+                    JoiningDate = emp.JoiningDate // Keep as DateTime for sorting
+                });
 
-        /*public async Task<IActionResult> ExportEmployees()
+            // Apply search filter if search value is present
+            if (!string.IsNullOrWhiteSpace(parameters.Search?.Value))
+            {
+                string searchValue = parameters.Search.Value.ToLower();
+                query = query.Where(emp =>
+                    emp.FirstName.ToLower().Contains(searchValue) ||
+                    emp.LastName.ToLower().Contains(searchValue) ||
+                    (emp.Department ?? "").ToLower().Contains(searchValue) ||
+                    (emp.Role ?? "").ToLower().Contains(searchValue) ||
+                    (emp.State ?? "").ToLower().Contains(searchValue) ||
+                    (emp.City ?? "").ToLower().Contains(searchValue)
+                );
+            }
+
+            // Sorting
+            if (parameters.Order.Any())
+            {
+                var order = parameters.Order.First();
+                bool ascending = order.Dir == "asc";
+
+                query = order.Column switch
+                {
+                    1 => ascending ? query.OrderBy(e => e.FirstName) : query.OrderByDescending(e => e.FirstName),
+                    2 => ascending ? query.OrderBy(e => e.LastName) : query.OrderByDescending(e => e.LastName),
+                    3 => ascending ? query.OrderBy(e => e.DOB) : query.OrderByDescending(e => e.DOB),
+                    4 => ascending ? query.OrderBy(e => e.Department) : query.OrderByDescending(e => e.Department),
+                    5 => ascending ? query.OrderBy(e => e.Role) : query.OrderByDescending(e => e.Role),
+                    6 => ascending ? query.OrderBy(e => e.IsActive) : query.OrderByDescending(e => e.IsActive),
+                    7 => ascending ? query.OrderBy(e => e.State) : query.OrderByDescending(e => e.State),
+                    8 => ascending ? query.OrderBy(e => e.City) : query.OrderByDescending(e => e.City),
+                    9 => ascending ? query.OrderBy(e => e.JoiningDate) : query.OrderByDescending(e => e.JoiningDate),
+                    _ => query // Ignore sorting on EmployeeId if no valid column specified
+                };
+            }
+
+            // Total record count before pagination
+            int recordsTotal = await _context.Employees.CountAsync();
+
+            // Apply pagination
+            var data = await query
+                .Skip(parameters.Start)
+                .Take(parameters.Length)
+                .ToListAsync();
+
+            // Convert date fields to strings in the final data set
+            var resultData = data.Select(emp => new
+            {
+                emp.EmployeeId,
+                emp.FirstName,
+                emp.LastName,
+                DOB = emp.DOB.ToString("dd-MM-yyyy"),  // Format date as string
+                Department = emp.Department,
+                Role = emp.Role,
+                IsActive = emp.IsActive,
+                State = emp.State,
+                City = emp.City,
+                JoiningDate = emp.JoiningDate.ToString("dd-MM-yyyy")  // Format date as string
+            });
+
+            // Return data in JSON format expected by DataTables
+            return Json(new
+            {
+                draw = parameters.Draw,
+                recordsFiltered = recordsTotal,
+                recordsTotal = recordsTotal,
+                data = resultData
+            });
+        }
+
+        public async Task<IActionResult> ExportEmployees()
         {
             var employees = await _context.Employees
                 .Include(e => e.Department)
@@ -128,7 +210,7 @@ namespace ETS_CRUD_DEMO.Controllers
         }
 
         // Action to import employees
-        [HttpPost]
+        /*[HttpPost]
         public async Task<IActionResult> ImportEmployees(IFormFile file)
         {
             if (file != null && (file.ContentType == "text/csv" || file.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
@@ -172,7 +254,6 @@ namespace ETS_CRUD_DEMO.Controllers
                             Skills = csv.GetField<string>("Skills")?.Split(';').ToList(),
                             IsActive = bool.Parse(csv.GetField<string>("IsActive")),
                             JoiningDate = DateTime.Parse(csv.GetField<string>("JoiningDate")),
-
                             // Get IDs for Department, Role, State, and City
                             DepartmentId = await GetDepartmentIdAsync(csv.GetField<string>("Department")),
                             RoleId = await GetRoleIdAsync(csv.GetField<string>("Role")),
@@ -242,483 +323,6 @@ namespace ETS_CRUD_DEMO.Controllers
         }
 */
 
-        public async Task<IActionResult> ExportEmployees()
-        {
-            // Get employees data with related entities
-            var employees = await _context.Employees
-                .Include(e => e.Department)
-                .Include(e => e.Role)
-                .Include(e => e.State)
-                .Include(e => e.City)
-                .ToListAsync();
-
-            // Project the required fields
-            var exportData = employees.Select(e => new
-            {
-                e.EmployeeId,
-                e.FirstName,
-                e.LastName,
-                e.Email,
-                e.PhoneNumber,
-                e.Gender,
-                DOB = e.DOB.ToString("yyyy-MM-dd"),
-                Skills = string.Join(", ", e.Skills),
-                Department = e.Department?.DepartmentName,
-                Role = e.Role?.RoleName,
-                IsActive = e.IsActive ? "Yes" : "No",
-                State = e.State?.StateName,
-                City = e.City?.CityName,
-                JoiningDate = e.JoiningDate.ToString("yyyy-MM-dd")
-            }).ToList();
-
-            // Create new workbook and sheet
-            var workbook = new XSSFWorkbook();
-            var sheet = workbook.CreateSheet("Employees");
-
-            // Create header row with style
-            var headerRow = sheet.CreateRow(0);
-            var headerStyle = workbook.CreateCellStyle();
-            var headerFont = workbook.CreateFont();
-            headerFont.IsBold = true;
-            headerStyle.SetFont(headerFont);
-
-            // Define headers
-            var headers = new[]
-            {
-        "EmployeeId", "FirstName", "LastName", "Email", "PhoneNumber",
-        "Gender", "DOB", "Skills", "Department", "Role", "IsActive",
-        "State", "City", "JoiningDate"
-    };
-
-            // Add headers with style
-            for (var i = 0; i < headers.Length; i++)
-            {
-                var cell = headerRow.CreateCell(i);
-                cell.SetCellValue(headers[i]);
-                cell.CellStyle = headerStyle;
-            }
-
-            // Add data rows
-            for (var i = 0; i < exportData.Count; i++)
-            {
-                var row = sheet.CreateRow(i + 1);
-                var data = exportData[i];
-
-                row.CreateCell(0).SetCellValue(data.EmployeeId.ToString());
-                row.CreateCell(1).SetCellValue(data.FirstName);
-                row.CreateCell(2).SetCellValue(data.LastName);
-                row.CreateCell(3).SetCellValue(data.Email);
-                row.CreateCell(4).SetCellValue(data.PhoneNumber);
-                row.CreateCell(5).SetCellValue(data.Gender.ToString());
-                row.CreateCell(6).SetCellValue(data.DOB);
-                row.CreateCell(7).SetCellValue(data.Skills);
-                row.CreateCell(8).SetCellValue(data.Department);
-                row.CreateCell(9).SetCellValue(data.Role);
-                row.CreateCell(10).SetCellValue(data.IsActive);
-                row.CreateCell(11).SetCellValue(data.State);
-                row.CreateCell(12).SetCellValue(data.City);
-                row.CreateCell(13).SetCellValue(data.JoiningDate);
-            }
-
-            // Autosize columns
-            for (var i = 0; i < headers.Length; i++)
-            {
-                sheet.AutoSizeColumn(i);
-            }
-
-            // Convert workbook to byte array
-            using var memoryStream = new MemoryStream();
-            workbook.Write(memoryStream, true);
-            var fileBytes = memoryStream.ToArray();
-
-            // Generate filename with timestamp
-            var fileName = $"Employees_{DateTime.Now:yyyyMMddHHmmss}.xlsx";
-
-            return File(
-                fileBytes,
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                fileName
-            );
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> ImportEmployees(IFormFile file)
-        {
-            if (file == null || file.Length == 0)
-            {
-                return BadRequest("No file uploaded.");
-            }
-
-            var validationResults = new List<ImportValidationResult>();
-            var successCount = 0;
-            var errorCount = 0;
-
-            try
-            {
-                using var stream = new MemoryStream();
-                await file.CopyToAsync(stream);
-                stream.Position = 0;
-
-                IWorkbook workbook;
-                if (file.FileName.EndsWith(".xlsx"))
-                {
-                    workbook = new XSSFWorkbook(stream);
-                }
-                else if (file.FileName.EndsWith(".xls"))
-                {
-                    workbook = new HSSFWorkbook(stream);
-                }
-                else
-                {
-                    return BadRequest("Invalid file format. Please upload an Excel file (.xlsx or .xls)");
-                }
-
-                var sheet = workbook.GetSheetAt(0);
-                var headerRow = sheet.GetRow(0);
-
-                // Validate header structure
-                var headerValidation = ValidateHeaderRow(headerRow);
-                if (!headerValidation.IsValid)
-                {
-                    return BadRequest(string.Join("\n", headerValidation.Errors));
-                }
-
-                // Get column indexes
-                var columnIndexes = GetColumnIndexes(headerRow);
-
-                // Process each row
-                for (int rowNum = 1; rowNum <= sheet.LastRowNum; rowNum++)
-                {
-                    var row = sheet.GetRow(rowNum);
-                    if (row == null) continue;
-
-                    var validationResult = await ValidateAndCreateEmployee(row, columnIndexes, rowNum + 1);
-                    validationResults.Add(validationResult);
-
-                    if (validationResult.IsValid)
-                    {
-                        successCount++;
-                    }
-                    else
-                    {
-                        errorCount++;
-                    }
-                }
-
-                // If there are any errors, prepare detailed error report
-                if (errorCount > 0)
-                {
-                    var errorMessage = new StringBuilder();
-                    errorMessage.AppendLine($"Found {errorCount} errors in the import file:");
-                    foreach (var result in validationResults.Where(r => !r.IsValid))
-                    {
-                        errorMessage.AppendLine(string.Join("\n", result.Errors));
-                    }
-
-                    TempData["ErrorMessage"] = errorMessage.ToString();
-                    return RedirectToAction(nameof(Index));
-                }
-
-                // Save valid employees to database
-                var validEmployees = validationResults
-                    .Where(r => r.IsValid)
-                    .Select(r => r.Employee)
-                    .ToList();
-
-                await _context.Employees.AddRangeAsync(validEmployees);
-                await _context.SaveChangesAsync();
-
-                TempData["SuccessMessage"] = $"Successfully imported {successCount} employees.";
-                return RedirectToAction(nameof(Index));
-            }
-            catch (Exception ex)
-            {
-                return BadRequest($"Error processing file: {ex.Message}");
-            }
-        }
-
-        private (bool IsValid, List<string> Errors) ValidateHeaderRow(IRow headerRow)
-        {
-            var errors = new List<string>();
-            var requiredColumns = new[]
-            {
-                "FirstName", "LastName", "Email", "PhoneNumber", "Gender",
-                "DOB", "Skills", "Department", "Role", "IsActive",
-                "State", "City", "JoiningDate"
-            };
-
-            var headerColumns = new List<string>();
-            for (int i = 0; i < headerRow.LastCellNum; i++)
-            {
-                var cell = headerRow.GetCell(i);
-                if (cell != null)
-                {
-                    headerColumns.Add(cell.StringCellValue.Trim());
-                }
-            }
-
-            foreach (var required in requiredColumns)
-            {
-                if (!headerColumns.Contains(required))
-                {
-                    errors.Add($"Missing required column: {required}");
-                }
-            }
-
-            return (errors.Count == 0, errors);
-        }
-
-        private Dictionary<string, int> GetColumnIndexes(IRow headerRow)
-        {
-            var indexes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase); // Make case-insensitive
-            for (int i = 0; i < headerRow.LastCellNum; i++)
-            {
-                var cell = headerRow.GetCell(i);
-                if (cell != null)
-                {
-                    indexes[cell.StringCellValue.Trim()] = i;
-                }
-            }
-            return indexes;
-        }
-
-        private async Task<ImportValidationResult> ValidateAndCreateEmployee(
-            IRow row,
-            Dictionary<string, int> columnIndexes,
-            int rowNumber)
-        {
-            var result = new ImportValidationResult();
-            var errors = new List<string>();
-
-            try
-            {
-                // Basic data extraction
-                var firstName = GetCellValueAsString(row.GetCell(columnIndexes["FirstName"]));
-                var lastName = GetCellValueAsString(row.GetCell(columnIndexes["LastName"]));
-                var email = GetCellValueAsString(row.GetCell(columnIndexes["Email"]));
-                var phoneNumber = GetCellValueAsString(row.GetCell(columnIndexes["PhoneNumber"]));
-                var genderString = GetCellValueAsString(row.GetCell(columnIndexes["Gender"]));
-                var dobCell = row.GetCell(columnIndexes["DOB"]);
-                var joiningDateCell = row.GetCell(columnIndexes["JoiningDate"]);
-                var skills = GetCellValueAsString(row.GetCell(columnIndexes["Skills"]));
-                var department = GetCellValueAsString(row.GetCell(columnIndexes["Department"]));
-                var role = GetCellValueAsString(row.GetCell(columnIndexes["Role"]));
-                var isActiveString = GetCellValueAsString(row.GetCell(columnIndexes["IsActive"]));
-                var state = GetCellValueAsString(row.GetCell(columnIndexes["State"]));
-                var city = GetCellValueAsString(row.GetCell(columnIndexes["City"]));
-
-                // Required field validation
-                if (string.IsNullOrWhiteSpace(firstName))
-                    errors.Add($"Row {rowNumber}: FirstName is required");
-                if (string.IsNullOrWhiteSpace(lastName))
-                    errors.Add($"Row {rowNumber}: LastName is required");
-                if (string.IsNullOrWhiteSpace(email))
-                    errors.Add($"Row {rowNumber}: Email is required");
-
-                // Email format validation
-                if (!string.IsNullOrWhiteSpace(email) && !IsValidEmail(email))
-                    errors.Add($"Row {rowNumber}: Invalid email format");
-
-                // Gender validation (case-insensitive)
-                GenderOptions gender;
-                if (!Enum.TryParse<GenderOptions>(genderString, true, out gender))
-                {
-                    errors.Add($"Row {rowNumber}: Invalid gender value. Must be one of: {string.Join(", ", Enum.GetNames<GenderOptions>())} (case-insensitive)");
-                }
-
-                // Date validations
-                DateTime dob;
-                if (!TryGetDateFromCell(dobCell, out dob))
-                    errors.Add($"Row {rowNumber}: Invalid DOB format");
-                else if (dob > DateTime.Now)
-                    errors.Add($"Row {rowNumber}: DOB cannot be in the future");
-
-                DateTime joiningDate;
-                if (!TryGetDateFromCell(joiningDateCell, out joiningDate))
-                    errors.Add($"Row {rowNumber}: Invalid Joining Date format");
-                else if (joiningDate > DateTime.Now)
-                    errors.Add($"Row {rowNumber}: Joining Date cannot be in the future");
-
-                // Department validation
-                var departmentId = await GetDepartmentIdAsync(department);
-                if (departmentId == Guid.Empty)
-                    errors.Add($"Row {rowNumber}: Invalid Department");
-
-                // Role validation
-                var roleId = await GetRoleIdAsync(role);
-                if (roleId == Guid.Empty)
-                    errors.Add($"Row {rowNumber}: Invalid Role");
-
-                // State and City validation - allowing null values
-                Guid? stateId = null;
-                Guid? cityId = null;
-
-                if (!string.IsNullOrWhiteSpace(state))
-                {
-                    var foundStateId = await GetStateIdAsync(state);
-                    if (foundStateId == Guid.Empty)
-                        errors.Add($"Row {rowNumber}: Invalid State");
-                    else
-                        stateId = foundStateId;
-                }
-
-                if (!string.IsNullOrWhiteSpace(city))
-                {
-                    var foundCityId = await GetCityIdAsync(city);
-                    if (foundCityId == Guid.Empty)
-                        errors.Add($"Row {rowNumber}: Invalid City");
-                    else
-                        cityId = foundCityId;
-                }
-
-                // Create employee if no errors
-                if (errors.Count == 0)
-                {
-                    result.Employee = new Employee
-                    {
-                        EmployeeId = Guid.NewGuid(),
-                        FirstName = firstName,
-                        LastName = lastName,
-                        Email = email,
-                        PhoneNumber = phoneNumber,
-                        Gender = gender,
-                        DOB = dob,
-                        Skills = !string.IsNullOrWhiteSpace(skills)
-                            ? skills.Split(';').Select(s => s.Trim()).ToList()
-                            : new List<string>(),
-                        DepartmentId = departmentId,
-                        RoleId = roleId,
-                        IsActive = string.IsNullOrWhiteSpace(isActiveString) ? false :
-                            bool.Parse(isActiveString.Trim()),
-                        StateId = stateId,
-                        CityId = cityId,
-                        JoiningDate = joiningDate
-                    };
-                    result.IsValid = true;
-                }
-                else
-                {
-                    result.IsValid = false;
-                    result.Errors = errors;
-                }
-            }
-            catch (Exception ex)
-            {
-                result.IsValid = false;
-                result.Errors.Add($"Row {rowNumber}: Unexpected error - {ex.Message}");
-            }
-
-            return result;
-        }
-
-        // Update the helper methods to be case-insensitive
-        public async Task<Guid> GetDepartmentIdAsync(string departmentName)
-        {
-            if (string.IsNullOrWhiteSpace(departmentName))
-                return Guid.Empty;
-
-            var department = await _context.Departments
-                .FirstOrDefaultAsync(d => d.DepartmentName.ToLower() == departmentName.Trim().ToLower());
-            return department?.DepartmentId ?? Guid.Empty;
-        }
-
-        public async Task<Guid> GetRoleIdAsync(string roleName)
-        {
-            if (string.IsNullOrWhiteSpace(roleName))
-                return Guid.Empty;
-
-            var role = await _context.Roles
-                .FirstOrDefaultAsync(r => r.RoleName.ToLower() == roleName.Trim().ToLower());
-            return role?.RoleId ?? Guid.Empty;
-        }
-
-        public async Task<Guid> GetStateIdAsync(string stateName)
-        {
-            if (string.IsNullOrWhiteSpace(stateName))
-                return Guid.Empty;
-
-            var state = await _context.States
-                .FirstOrDefaultAsync(s => s.StateName.ToLower() == stateName.Trim().ToLower());
-            return state?.StateId ?? Guid.Empty;
-        }
-
-        public async Task<Guid> GetCityIdAsync(string cityName)
-        {
-            if (string.IsNullOrWhiteSpace(cityName))
-                return Guid.Empty;
-
-            var city = await _context.Cities
-                .FirstOrDefaultAsync(c => c.CityName.ToLower() == cityName.Trim().ToLower());
-            return city?.CityId ?? Guid.Empty;
-        }
-
-        private string GetCellValueAsString(ICell cell)
-        {
-            if (cell == null) return string.Empty;
-
-            switch (cell.CellType)
-            {
-                case CellType.String:
-                    return cell.StringCellValue?.Trim() ?? string.Empty;
-                case CellType.Numeric:
-                    if (DateUtil.IsCellDateFormatted(cell))
-                        return cell.DateCellValue.ToString();   // ToString("yyyy-MM-dd");
-                    return cell.NumericCellValue.ToString();
-                case CellType.Boolean:
-                    return cell.BooleanCellValue.ToString();
-                default:
-                    return string.Empty;
-            }
-        }
-        private bool TryGetDateFromCell(ICell cell, out DateTime result)
-        {
-            result = DateTime.MinValue;
-            if (cell == null) return false;
-
-            try
-            {
-                if (cell.CellType == CellType.Numeric && DateUtil.IsCellDateFormatted(cell))
-                {
-                    result = (DateTime)cell.DateCellValue;
-                    return true;
-                }
-
-                if (cell.CellType == CellType.String)
-                {
-                    var dateString = cell.StringCellValue;
-                    var formats = new[] {
-                        "yyyy-MM-dd", "dd/MM/yyyy", "MM/dd/yyyy",
-                        "dd-MM-yyyy", "MM-dd-yyyy", "yyyy/MM/dd"
-                    };
-
-                    foreach (var format in formats)
-                    {
-                        if (DateTime.TryParseExact(dateString, format,
-                            CultureInfo.InvariantCulture,
-                            DateTimeStyles.None, out result))
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-            catch { }
-
-            return false;
-        }
-
-        private bool IsValidEmail(string email)
-        {
-            try
-            {
-                var addr = new System.Net.Mail.MailAddress(email);
-                return addr.Address == email;
-            }
-            catch
-            {
-                return false;
-            }
-        }
 
         // GET: Employees/Details/5
         public async Task<IActionResult> Details(Guid? id)
@@ -754,9 +358,12 @@ namespace ETS_CRUD_DEMO.Controllers
 
         // POST: Employee/Create
         [HttpPost]
+
         [ValidateAntiForgeryToken]
 
-        public async Task<IActionResult> Create([Bind("FirstName,LastName,Email,PhoneNumber,Gender,DOB,DepartmentId,RoleId,IsActive,StateId,CityId,JoiningDate")] Employee employee,
+        public async Task<IActionResult> Create(
+           [Bind("FirstName,LastName,Email,PhoneNumber,Gender,DOB,DepartmentId,RoleId,IsActive,StateId,CityId,JoiningDate")]
+           Employee employee,
             IFormFile profileImage, List<string> SelectedSkills)
         {
             //if (ModelState.IsValid)
@@ -1012,32 +619,370 @@ namespace ETS_CRUD_DEMO.Controllers
             return _context.Employees.Any(e => e.EmployeeId == id);
         }
 
-        /* public async Task<Guid> GetDepartmentIdAsync(string departmentName)
-         {
-             var department = await _context.Departments
-                 .FirstOrDefaultAsync(d => d.DepartmentName == departmentName);
-             return department.DepartmentId;
-         }
+        public async Task<Guid> GetDepartmentIdAsync(string departmentName)
+        {
+            var department = await _context.Departments
+                .FirstOrDefaultAsync(d => d.DepartmentName == departmentName);
+            return department.DepartmentId;
+        }
 
-         public async Task<Guid> GetRoleIdAsync(string roleName)
-         {
-             var role = await _context.Roles
-                 .FirstOrDefaultAsync(r => r.RoleName == roleName);
-             return role.RoleId;
-         }
+        public async Task<Guid> GetRoleIdAsync(string roleName)
+        {
+            var role = await _context.Roles
+                .FirstOrDefaultAsync(r => r.RoleName == roleName);
+            return role.RoleId;
+        }
 
-         public async Task<Guid> GetStateIdAsync(string stateName)
-         {
-             var state = await _context.States
-                 .FirstOrDefaultAsync(s => s.StateName == stateName);
-             return state.StateId;
-         }
+        public async Task<Guid> GetStateIdAsync(string stateName)
+        {
+            var state = await _context.States
+                .FirstOrDefaultAsync(s => s.StateName == stateName);
+            return state.StateId;
+        }
 
-         public async Task<Guid> GetCityIdAsync(string cityName)
-         {
-             var city = await _context.Cities
-                 .FirstOrDefaultAsync(c => c.CityName == cityName);
-             return city.CityId;
-         }*/
+        public async Task<Guid> GetCityIdAsync(string cityName)
+        {
+            var city = await _context.Cities
+                .FirstOrDefaultAsync(c => c.CityName == cityName);
+
+
+            if (city == null)
+            {
+                // Handle the case when city is not found
+                Console.WriteLine($"City '{cityName}' not found in database.");
+
+                throw new KeyNotFoundException($"City '{cityName}' not found in database.");
+            }
+            return city.CityId;
+        }
+
+
+        public async Task<IActionResult> ImportCsv(IFormFile file)
+        {
+            if (file == null || !(file.ContentType == "text/csv" || file.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+            {
+                var error = "Please upload a valid CSV or Excel file.";
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = false, message = error });
+                }
+                TempData["ImportErrors"] = new List<string> { error };
+                return View("ImportErrors");
+            }
+
+            var employees = new List<Employee>();
+            var errors = new List<string>();
+
+            using var stream = new MemoryStream();
+            await file.CopyToAsync(stream);
+
+            if (file.ContentType == "text/csv")
+            {
+                // CSV file processing
+                stream.Position = 0;
+                using var reader = new StreamReader(stream);
+                using var csv = new CsvReader(reader, CultureInfo.InvariantCulture);
+
+                try
+                {
+                    csv.Read();
+                    csv.ReadHeader();
+                    var headerRow = csv.HeaderRecord;
+                    var requiredColumns = new List<string> { "FirstName", "LastName", "Email", "PhoneNumber", "Gender", "DOB", "Skills", "Department", "Role", "IsActive", "State", "City", "JoiningDate" };
+                    var missingColumns = requiredColumns.Where(column => !headerRow.Contains(column)).ToList();
+
+                    if (missingColumns.Any())
+                    {
+                        var error = $"Missing required columns: {string.Join(", ", missingColumns)}.";
+                        if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                        {
+                            return Json(new { success = false, message = error });
+                        }
+                        TempData["ImportErrors"] = new List<string> { error };
+                        return View("ImportErrors");
+                    }
+
+                    while (csv.Read())
+                    {
+                        try
+                        {
+                            var rowNumber = csv.Context.Parser.Row;
+                            bool rowIsValid = true;
+
+                            // First Name validation
+                            var firstName = csv.GetField<string>("FirstName");
+                            if (string.IsNullOrWhiteSpace(firstName))
+                            {
+                                errors.Add($"Row {rowNumber}, Column FirstName: First Name is required.");
+                                rowIsValid = false;
+                            }
+
+                            // Last Name validation
+                            var lastName = csv.GetField<string>("LastName");
+                            if (string.IsNullOrWhiteSpace(lastName))
+                            {
+                                errors.Add($"Row {rowNumber}, Column LastName: Last Name is required.");
+                                rowIsValid = false;
+                            }
+
+                            // Email validation
+                            var email = csv.GetField<string>("Email");
+                            if (!new EmailAddressAttribute().IsValid(email))
+                            {
+                                errors.Add($"Row {rowNumber}, Column Email: Invalid Email format.");
+                                rowIsValid = false;
+                            }
+                            else
+                            {
+                                var existingEmployee = await _context.Employees.FirstOrDefaultAsync(e => e.Email == email);
+                                if (existingEmployee != null)
+                                {
+                                    errors.Add($"Row {rowNumber}, Column Email: Email '{email}' already exists in the database.");
+                                    rowIsValid = false;
+                                }
+                            }
+
+                            // Phone Number validation
+                            var phoneNumber = csv.GetField<string>("PhoneNumber");
+                            if (!Regex.IsMatch(phoneNumber ?? "", @"^\d{10}$"))
+                            {
+                                errors.Add($"Row {rowNumber}, Column PhoneNumber: Invalid phone number format. Must be 10 digits.");
+                                rowIsValid = false;
+                            }
+
+                            // Gender validation
+                            var genderStr = csv.GetField<string>("Gender")?.ToLower();
+                            if (genderStr != "male" && genderStr != "female" && genderStr != "other")
+                            {
+                                errors.Add($"Row {rowNumber}, Column Gender: Gender must be 'Male', 'Female', or 'Other'.");
+                                rowIsValid = false;
+                            }
+
+                            // DOB validation
+                            var dobStr = csv.GetField<string>("DOB");
+                            if (!DateTime.TryParse(dobStr, out DateTime dob))
+                            {
+                                errors.Add($"Row {rowNumber}, Column DOB: Invalid date format.");
+                                rowIsValid = false;
+                            }
+
+                            // Department validation
+                            var departmentName = csv.GetField<string>("Department");
+                            var department = await _context.Departments
+                                .FirstOrDefaultAsync(d => d.DepartmentName.ToLower() == departmentName.ToLower());
+                            if (department == null)
+                            {
+                                errors.Add($"Row {rowNumber}, Column Department: Department '{departmentName}' does not exist.");
+                                rowIsValid = false;
+                            }
+
+                            // Role validation
+                            var roleName = csv.GetField<string>("Role");
+                            var role = await _context.Roles
+                                .FirstOrDefaultAsync(r => r.RoleName.ToLower() == roleName.ToLower());
+                            if (role == null)
+                            {
+                                errors.Add($"Row {rowNumber}, Column Role: Role '{roleName}' not found.");
+                                rowIsValid = false;
+                            }
+
+                            // State validation
+                            var stateName = csv.GetField<string>("State");
+                            var state = await _context.States
+                                .FirstOrDefaultAsync(s => s.StateName.ToLower() == stateName.ToLower());
+                            if (state == null)
+                            {
+                                errors.Add($"Row {rowNumber}, Column State: State '{stateName}' not found.");
+                                rowIsValid = false;
+                            }
+
+                            // City validation
+                            var cityName = csv.GetField<string>("City");
+                            var city = await _context.Cities
+                                .FirstOrDefaultAsync(c => c.CityName.ToLower() == cityName.ToLower());
+                            if (city == null)
+                            {
+                                errors.Add($"Row {rowNumber}, Column City: City '{cityName}' not found.");
+                                rowIsValid = false;
+                            }
+
+                            if (rowIsValid)
+                            {
+                                var employee = new Employee
+                                {
+                                    EmployeeId = Guid.NewGuid(),
+                                    FirstName = firstName,
+                                    LastName = lastName,
+                                    Email = email,
+                                    PhoneNumber = phoneNumber,
+                                    Gender = Enum.Parse<GenderOptions>(genderStr, true),
+                                    DOB = dob,
+                                    Skills = csv.GetField<string>("Skills")?.Split(';').ToList() ?? new List<string>(),
+                                    IsActive = csv.GetField<bool>("IsActive"),
+                                    JoiningDate = DateTime.Parse(csv.GetField<string>("JoiningDate")),
+                                    DepartmentId = department.DepartmentId,
+                                    RoleId = role.RoleId,
+                                    StateId = state.StateId,
+                                    CityId = city.CityId
+                                };
+                                employees.Add(employee);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add($"Error processing row {csv.Context.Parser.Row}: {ex.Message}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"Error processing CSV file: {ex.Message}");
+                }
+            }
+
+            // Similar validation for Excel files...
+            else if (file.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            {
+                // Excel processing with similar validations
+                // ... (Similar validation logic for Excel)
+            }
+
+            if (errors.Any())
+            {
+                TempData["ImportErrors"] = errors;
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return View("ImportErrors");
+                }
+                return View("ImportErrors");
+            }
+
+            try
+            {
+                await _context.Employees.AddRangeAsync(employees);
+                await _context.SaveChangesAsync();
+
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = true, message = $"Successfully imported {employees.Count} employees." });
+                }
+                TempData["SuccessMessage"] = $"Successfully imported {employees.Count} employees.";
+                return RedirectToAction(nameof(Index));
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"Database error: {ex.Message}");
+                TempData["ImportErrors"] = errors;
+
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return View("ImportErrors");
+                }
+                return View("ImportErrors");
+            }
+        }
+        public IActionResult ExportCsv()
+        {
+            var employees = _context.Employees.ToList();
+
+            using (var workbook = new XSSFWorkbook())
+            {
+                var sheet = workbook.CreateSheet("Employees");
+
+                // Create header row
+                var headerRow = sheet.CreateRow(0);
+                headerRow.CreateCell(0).SetCellValue("EmployeeId");
+                headerRow.CreateCell(1).SetCellValue("First Name");
+                headerRow.CreateCell(2).SetCellValue("Last Name");
+                headerRow.CreateCell(3).SetCellValue("Email");
+                headerRow.CreateCell(4).SetCellValue("Phone Number");
+                headerRow.CreateCell(5).SetCellValue("Gender");
+                headerRow.CreateCell(6).SetCellValue("DOB");
+                headerRow.CreateCell(7).SetCellValue("Skills");
+                headerRow.CreateCell(8).SetCellValue("DepartmentId");
+                headerRow.CreateCell(9).SetCellValue("RoleId");
+                headerRow.CreateCell(10).SetCellValue("IsActive");
+                headerRow.CreateCell(11).SetCellValue("Profile Picture");
+                headerRow.CreateCell(12).SetCellValue("StateId");
+                headerRow.CreateCell(13).SetCellValue("CityId");
+                headerRow.CreateCell(14).SetCellValue("Joining Date");
+
+                // Populate rows with employee data
+                for (int i = 0; i < employees.Count; i++)
+                {
+                    var row = sheet.CreateRow(i + 1);
+                    var emp = employees[i];
+                    row.CreateCell(0).SetCellValue(emp.EmployeeId.ToString());
+                    row.CreateCell(1).SetCellValue(emp.FirstName);
+                    row.CreateCell(2).SetCellValue(emp.LastName);
+                    row.CreateCell(3).SetCellValue(emp.Email);
+                    row.CreateCell(4).SetCellValue(emp.PhoneNumber);
+                    row.CreateCell(5).SetCellValue(emp.Gender.ToString());
+                    row.CreateCell(6).SetCellValue(emp.DOB.ToString("yyyy-MM-dd"));
+                    row.CreateCell(7).SetCellValue(string.Join(",", emp.Skills));
+                    row.CreateCell(8).SetCellValue(emp.DepartmentId.ToString());
+                    row.CreateCell(9).SetCellValue(emp.RoleId.ToString());
+                    row.CreateCell(10).SetCellValue(emp.IsActive ? "Yes" : "No");
+                    row.CreateCell(11).SetCellValue(emp.ProfilePicture);
+                    row.CreateCell(12).SetCellValue(emp.StateId?.ToString());
+                    row.CreateCell(13).SetCellValue(emp.CityId?.ToString());
+                    row.CreateCell(14).SetCellValue(emp.JoiningDate.ToString("yyyy-MM-dd"));
+                }
+
+                using (var stream = new MemoryStream())
+                {
+                    workbook.Write(stream);
+                    var content = stream.ToArray();
+                    return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Employees.xlsx");
+                }
+            }
+        }
+        private DateTime ParseDate(string dateStr, int row, string columnName, List<string> errors)
+        {
+            if (DateTime.TryParseExact(dateStr, new[] { "yyyy-MM-dd", "MM/dd/yyyy", "dd-MM-yyyy" },
+                                       CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+            {
+                return date;
+            }
+            errors.Add($"Row {row + 1}, Column {columnName}: Invalid date format.");
+            return DateTime.MinValue; // Default value for invalid dates
+        }
+
+        private GenderOptions ParseGender(string genderStr, int row, List<string> errors)
+        {
+            if (Enum.TryParse(typeof(GenderOptions), genderStr, true, out var gender))
+            {
+                return (GenderOptions)gender;
+            }
+            errors.Add($"Row {row + 1}, Column Gender: Invalid gender value (allowed: Male, Female, Other).");
+            return GenderOptions.Other; // Default value for invalid enums
+        }
+
+        private Guid ParseGuid(string guidStr, int row, string columnName, List<string> errors)
+        {
+            if (Guid.TryParse(guidStr, out var guid))
+            {
+                return guid;
+            }
+            errors.Add($"Row {row + 1}, Column {columnName}: Invalid GUID format.");
+            return Guid.Empty;
+        }
+
+        private Guid? ParseNullableGuid(string guidStr, int row, string columnName, List<string> errors)
+        {
+            if (string.IsNullOrWhiteSpace(guidStr)) return null;
+            return Guid.TryParse(guidStr, out var guid) ? guid : (Guid?)null;
+        }
+
+        private bool ParseBoolean(string boolStr, int row, string columnName, List<string> errors)
+        {
+            if (bool.TryParse(boolStr, out var boolValue))
+            {
+                return boolValue;
+            }
+            errors.Add($"Row {row + 1}, Column {columnName}: Invalid boolean value (allowed: true, false).");
+            return false;
+        }
+
     }
 }
