@@ -1,0 +1,198 @@
+﻿@model IEnumerable<ETS_CRUD_DEMO.Models.Employee>
+
+@{
+    ViewData["Title"] = "Employees";
+}
+
+<!-- DataTables CSS -->
+<link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+<link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet">
+
+<div class="container-fluid">
+    <h1 class="mb-2">Employees</h1>
+
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+            <a href="@Url.Action("Create")" class="text-primary">Add New</a>
+        </div>
+        <div class="d-flex gap-3 align-items-center">
+           @*  <div class="search-container">
+                <input type="text" id="customSearch" class="form-control" placeholder="Search employees..." style="width: 250px;">
+            </div> *@
+            <form id="importForm"  enctype="multipart/form-data" class="d-inline">
+                <input type="file" id="importFile" name="file" accept=".csv, .xlsx" class="d-none" />
+                <button type="button" onclick="triggerFileInput()" class="btn btn-secondary">Import</button>
+            </form>
+            @* <a href="@Url.Action("ExportEmployees")" class="btn btn-info">Export</a> *@
+
+            <a asp-action="ExportCsv" class="btn btn-primary">Export</a>
+
+        </div>
+    </div>
+
+    <table id="employeesTable" class="table" width="100%">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>@Html.DisplayNameFor(model => model.FirstName)</th>
+                <th>@Html.DisplayNameFor(model => model.LastName)</th>
+                @* <th>@Html.DisplayNameFor(model => model.PhoneNumber)</th> *@
+                @* <th>@Html.DisplayNameFor(model => model.Gender)</th> *@
+                <th>@Html.DisplayNameFor(model => model.DOB)</th>
+                <th>@Html.DisplayNameFor(model => model.Department)</th>
+                <th>@Html.DisplayNameFor(model => model.Role)</th>
+                <th>@Html.DisplayNameFor(model => model.IsActive)</th>
+                @* <th>@Html.DisplayNameFor(model => model.ProfilePicture)</th> *@
+                <th>@Html.DisplayNameFor(model => model.State)</th>
+                <th>@Html.DisplayNameFor(model => model.City)</th>
+                <th>@Html.DisplayNameFor(model => model.JoiningDate)</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model.Select((value, index) => new { value, index }))
+            {
+                <tr>
+                    <td>@(item.index + 1)</td>
+                    <td>@Html.DisplayFor(modelItem => item.value.FirstName)</td>
+                    <td>@Html.DisplayFor(modelItem => item.value.LastName)</td>
+                    @* <td>@Html.DisplayFor(modelItem => item.value.PhoneNumber)</td> *@
+                    @* <td>@Html.DisplayFor(modelItem => item.value.Gender)</td> *@
+                    <td>@item.value.DOB.ToString("dd-MM-yyyy")</td>
+                    <td>@Html.DisplayFor(modelItem => item.value.Department.DepartmentName)</td>
+                    <td>@Html.DisplayFor(modelItem => item.value.Role.RoleName)</td>
+                    <td>@(item.value.IsActive ? "Yes" : "No")</td>
+                    @* <td>
+                @if (!string.IsNullOrEmpty(item.value.ProfilePicture))
+                {
+                <img src="@item.value.ProfilePicture" alt="Profile" style="width: 40px; height: 40px; object-fit: cover; border-radius: 50%;" />
+                }
+                else
+                {
+                <span>No Image</span>
+                }
+                </td> *@
+                    <td>@Html.DisplayFor(modelItem => item.value.State.StateName)</td>
+                    <td>@Html.DisplayFor(modelItem => item.value.City.CityName)</td>
+                    <td>@item.value.JoiningDate.ToString("dd-MM-yyyy")</td>
+                    <td class="action-buttons">
+                        @* Role-based rendering *@
+                        @if (User.IsInRole("Admin"))
+                        {
+                            <a asp-action="Edit" asp-route-id="@item.value.EmployeeId">Edit</a> <span> | </span>
+                            <a asp-action="Delete" asp-route-id="@item.value.EmployeeId">Delete</a> <span> | </span>
+                            <a asp-action="Details" asp-route-id="@item.value.EmployeeId"> Details </a>
+                        }
+                        else if (User.IsInRole("Sub-admin"))
+                        {
+                            <a asp-action="Details" asp-route-id="@item.value.EmployeeId">Details</a>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@section Scripts {
+    <!-- DataTables JavaScript -->
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            $('#employeesTable').DataTable({
+                processing: true,
+                serverSide: true,
+                responsive: true,
+                ajax: {
+                    url: '@Url.Action("GetEmployees", "Employees")',
+                    type: 'POST'
+                },
+                columns: [
+                    {
+                        data: null, // Serial number column
+                        render: function (data, type, row, meta) {
+                            var pageInfo = $('#employeesTable').DataTable().page.info();
+                            return pageInfo.start + meta.row + 1; // Adjust row number based on the current page
+                        },
+                        orderable: false, // Disable ordering on this column
+                        searchable: false  // Disable searching on this column
+                    },
+                    { data: 'firstName' },
+                    { data: 'lastName' },
+                    { data: 'dob' },
+                    { data: 'department' },
+                    { data: 'role' },
+                    { data: 'isActive' },
+                    { data: 'state' },
+                    { data: 'city' },
+                    { data: 'joiningDate' },
+                    {
+                        data: 'employeeId', // Keep employeeId for action links
+                        render: function (data, type, row) {
+                            return `
+                                                                        <a href="/Employees/Edit/${data}">Edit</a> |
+                                                                        <a href="/Employees/Details/${data}">Details</a> |
+                                                                        <a href="/Employees/Delete/${data}">Delete</a>`;
+                        },
+                        orderable: false,
+                        searchable: false
+                    }
+                ],
+                order: [[1, 'asc']], // Default ordering on firstName or another column, not serial numbers
+                pageLength: 7,
+                lengthMenu: [
+                    [7, 10, 25, 50, -1],
+                    ['7', '10', '25', '50', 'All']
+                ],
+
+            });
+        });
+        $('#customSearchBox').on('keyup', function () {
+            $('#employeesTable').DataTable().search(this.value).draw();
+        });
+        function triggerFileInput() {
+            const input = document.getElementById('importFile');
+            input.click();
+            input.onchange = function (e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    $.ajax({
+                        url: '@Url.Action("ImportCsv")',
+                        type: 'POST',
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        success: function (response) {
+                            // Check if response is HTML (error page)
+                            if (typeof response === 'string' && (response.includes('<!DOCTYPE html>') || response.includes('<html'))) {
+                                document.documentElement.innerHTML = response;
+                            }
+                            // Check if response is JSON object with success property
+                            else if (response && response.success === true) {
+                                alert(response.message || 'Data imported successfully');
+                                location.reload();
+                            }
+                            // Handle other success cases
+                            else {
+                                alert('Import completed but with unknown response');
+                                location.reload();
+                            }
+                        },
+                        error: function (xhr, status, error) {
+                            if (xhr.responseText.includes('<!DOCTYPE html>') || xhr.responseText.includes('<html')) {
+                                document.documentElement.innerHTML = xhr.responseText;
+                            } else {
+                                alert('Error importing file: ' + error);
+                            }
+                        }
+                    });
+                }
+            };
+        }
+    </script>
+}
