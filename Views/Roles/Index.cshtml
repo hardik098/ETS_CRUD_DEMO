@@ -34,9 +34,11 @@
                     @Html.DisplayFor(modelItem => item.value.Permissions)
                 </td>
                 <td>
-                    <a asp-action="Edit" asp-route-id="@item.value.RoleId">Edit</a> |
-                    <a asp-action="Details" asp-route-id="@item.value.RoleId">Details</a> |
-                    <a asp-action="Delete" asp-route-id="@item.value.RoleId">Delete</a>
+                 
+                    <a asp-action="Edit" asp-route-id="@item.value.RoleId"> Edit </a> |
+                    <a asp-action="Delete" asp-route-id="@item.value.RoleId">Delete</a>|          
+                    <a asp-action="Details" asp-route-id="@item.value.RoleId">Details</a> 
+                    
                 </td>
             </tr>
         }

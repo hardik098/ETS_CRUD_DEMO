@@ -15,6 +15,7 @@
         <div>
             <a href="@Url.Action("Create")" class="text-primary">Add New</a>
         </div>
+
         <div class="d-flex gap-3 align-items-center">
            @*  <div class="search-container">
                 <input type="text" id="customSearch" class="form-control" placeholder="Search employees..." style="width: 250px;">
@@ -132,6 +133,93 @@
                         data: 'employeeId', // Keep employeeId for action links
                         render: function (data, type, row) {
                             return `
+                                                        <a href="/Employees/Edit/${data}">Edit</a> |
+                                                        <a href="/Employees/Details/${data}">Details</a> |
+                                                        <a href="/Employees/Delete/${data}">Delete</a>`;
+                        },
+                        orderable: false,
+                        searchable: false
+                    }
+                ],
+                order: [[1, 'asc']], // Default ordering on firstName or another column, not serial numbers
+                pageLength: 7,
+                lengthMenu: [
+                    [7, 10, 25, 50, -1],
+                    ['7', '10', '25', '50', 'All']
+                ],
+
+            });
+        });
+        $('#customSearchBox').on('keyup', function () {
+            $('#employeesTable').DataTable().search(this.value).draw();
+        });
+        function triggerFileInput() {
+            const input = document.getElementById('importFile');
+            input.click();
+            input.onchange = function (e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    $.ajax({
+                        url: '@Url.Action("ImportEmployees")',
+                        type: 'POST',
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        success: function (response) {
+                            alert('Data imported successfully');
+                            location.reload();
+                        },
+                        error: function (xhr, status, error) {
+                            alert('Error importing file: ' + xhr.responseText);
+                        }
+                    });
+                }
+            };
+        }
+    </script>
+}
+@*
+@section Scripts {
+    <!-- DataTables JavaScript -->
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            $('#employeesTable').DataTable({
+                processing: true,
+                serverSide: true,
+                responsive: true,
+                ajax: {
+                    url: '@Url.Action("GetEmployees", "Employees")',
+                    type: 'POST'
+                },
+                columns: [
+                    {
+                        data: null, // Serial number column
+                        render: function (data, type, row, meta) {
+                            var pageInfo = $('#employeesTable').DataTable().page.info();
+                            return pageInfo.start + meta.row + 1; // Adjust row number based on the current page
+                        },
+                        orderable: false, // Disable ordering on this column
+                        searchable: false  // Disable searching on this column
+                    },
+                    { data: 'firstName' },
+                    { data: 'lastName' },
+                    { data: 'dob' },
+                    { data: 'department' },
+                    { data: 'role' },
+                    { data: 'isActive' },
+                    { data: 'state' },
+                    { data: 'city' },
+                    { data: 'joiningDate' },
+                    {
+                        data: 'employeeId', // Keep employeeId for action links
+                        render: function (data, type, row) {
+                            return `
                                                                         <a href="/Employees/Edit/${data}">Edit</a> |
                                                                         <a href="/Employees/Details/${data}">Details</a> |
                                                                         <a href="/Employees/Delete/${data}">Delete</a>`;
@@ -194,5 +282,4 @@
                 }
             };
         }
-    </script>
-}
+    </script>  *@
