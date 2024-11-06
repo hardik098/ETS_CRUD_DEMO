@@ -9,6 +9,7 @@
         public List<DataTableOrder> Order { get; set; }
         public List<DataTableColumn> Columns { get; set; }
     }
+
     public class DataTableSearch
     {
         public string Value { get; set; }

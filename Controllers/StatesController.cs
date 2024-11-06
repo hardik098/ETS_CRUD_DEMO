@@ -30,7 +30,6 @@ namespace ETS_CRUD_DEMO.Controllers
         {
             return View(await _context.States.ToListAsync());
         }
-
         [HttpPost]
         public async Task<IActionResult> GetStates([FromForm] DataTableParameters parameters)
         {
@@ -89,6 +88,8 @@ namespace ETS_CRUD_DEMO.Controllers
                 data = resultData
             });
         }
+
+        
 
         // Import states from CSV or Excel file
         [HttpPost]
